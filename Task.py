@@ -8,13 +8,21 @@ class Task:
     parents = None
     dag_id = None
 
-    def __init__(self, name, json_task_data: dict) -> None:
+    is_complete:bool = None
+
+    def __init__(self, name, dag_name, json_task_data: dict) -> None:
         self.name = name
         self.EET = json_task_data['EET']
         self._type = json_task_data['Type']
 
         self.children: list[(Task, int)] = list()
         self.parents: list[(Task, int)] = list()  # Needed?
+
+        self.is_complete:bool = False
+        self.dag_id = dag_name
+
+    # from the list of parents, find the max eet for this task
+    # and that would be the starting time for this task.
 
     def add_child(self, task, weight):
         self.children.append((task, weight))
