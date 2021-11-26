@@ -10,16 +10,15 @@ class Task:
         self.EET = json_task_data['EET']
         self.instance = json_task_data['Type']
         
-        self.children:list[Task] = list()
+        self.children:dict[Task, int] = dict()
         self.parents :list[Task] = list()
 
-    def add_child(self, task):
-        self.children.append(task)
-
-    def add_parent(self, task):
-        self.parents.append(task)
     def __str__(self) -> str:
-        return json.dumps(self.__dict__, default=lambda o:o.__dict__)
+        return json.dumps(str(self.__dict__), default=lambda o:o.name if type(o) == Task else str(o.__dict__))
+
+def wire_tasks(parent:Task, child:Task, ict:int):
+    parent.children[child] = ict
+    child.parents.append(parent)
 
 class DAG:
     name = None
@@ -43,7 +42,8 @@ class DAG:
         for task in self.task_list:
             for next_task_name in json_dag_data[task.name]['next']:
                 child = name_to_task[next_task_name]
-                task.add_child(child)
+                ict = json_dag_data[task.name]['next'][next_task_name]
+                wire_tasks(task, child, ict)
 
     
     def __init__task_recursive(self, task_name, json_dag_data):
@@ -56,9 +56,10 @@ class DAG:
         return task
 
     def __str__(self) -> str:
-        return json.dumps(self.__dict__, default=lambda o: o.__dict__, indent=4)
+        return json.dumps(self.__dict__, default=lambda o: str(o) if type(o) == Task else o.__dict__, indent=4)
 
 
-handle = open("testcases/test1.json")
+handle = open("sample.json")
 data = json.load(handle)
 dag_list:list[DAG] = [DAG(name, data[name]) for name in data]
+dag0 = dag_list[0]
