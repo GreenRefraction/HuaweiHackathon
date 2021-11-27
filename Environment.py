@@ -32,9 +32,12 @@ class Environment:
             #self.dag_arrival.sort(key = lambda d: d.arrival_time)  # Can be done faster
         self.time_stamp += dt
         #print(self.time_stamp)
+    def get_next_arrival_time(self) -> int:
+        if len(self.dag_arrival) != 0:
+            return self.dag_arrival[0].arrival_time
+        else:
+            return None
     def calc_next_time_step(self):
-        dt = 1
-        
         # The first scenario is if all the processors are not available
         # i.e they are all busy, we can skip forward to the 
         all_processors_are_busy = True
@@ -45,14 +48,17 @@ class Environment:
                 all_processors_are_busy = False
             else:            
                 min_finish_time = min(processor.finish_time_of_running_task, min_finish_time)
+        next_arrival_time = self.get_next_arrival_time()
+
         if all_processors_are_busy:
             # step to the time when the first running task is finished
             dt = min_finish_time - self.time_stamp
-        else:
+            return dt
+        elif next_arrival_time is not None:
             # the processors are not busy then we can check the arrival time of upcomming dags
-            min_arrival_time = 1e100
-            for dag in self.dag_list:
-                min_arrival_time = min(min_arrival_time, dag.arrival_time)
-            next_time_step = min(min_arrival_time, min_finish_time, 1)
+            next_time_step = min(next_arrival_time, min_finish_time)
             dt = next_time_step - self.time_stamp
-        return dt
+            return dt
+        else:
+            # by default we take 1 timestep
+            return 1

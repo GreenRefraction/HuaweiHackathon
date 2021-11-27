@@ -99,7 +99,8 @@ def output_csv(processor_list:list[Processor], dag_list:list[DAG], elapsed_time,
 
 def main():
     dag_list: list[DAG] = load_from_json('testcases/test1.json')
-    dag_list = dag_list[:4]
+    print(len(dag_list))
+    dag_list = dag_list
     #dag_list: list[DAG] = load_from_json('sample.json')
     
     # something that keeps track of what we've done
@@ -120,7 +121,6 @@ def main():
         # we can start of with the case of not being able to schedule anythin
         # due to all the processors being busy
         env.step()
-        print(env.time_stamp)
     stop_time = time.time_ns()
     exec_time_scheduler = (stop_time - start_time)//1e6  # CHECK? rounding error?
     print("Execution time:", exec_time_scheduler)
