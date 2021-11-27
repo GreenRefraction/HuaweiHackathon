@@ -8,7 +8,9 @@ class Environment:
     def __init__(self, dag_list:list[DAG], processor_list:list[Processor]) -> None:
         self.dag_list   :list[DAG] = dag_list
         self.dag_arrival:list[DAG] = sorted(dag_list, key = lambda d: d.arrival_time)
-        self.processing_dag_list:list[str] = list()
+        
+
+        self.processing_dag_list:list[DAG] = list()
 
         self.upcomming_tasks:list[Task] = [] 
         self.time_stamp:int = 0
@@ -34,11 +36,22 @@ class Environment:
         self.time_stamp += dt
         
         # Now we want to check if we fail the task
+
+        # this list contains dags that can be removed from 
+        dags_to_remove:list[DAG] = list()
+        for dag in self.processing_dag_list:
+            if dag.is_complete:
+                dags_to_remove.append(dag)
+        # remove the completed dags from the currently running dags
+        for dag in dags_to_remove:
+            self.processing_dag_list.remove(dag)
+        
+        for dag in self.processing_dag_list:
+            if dag.arrival_time + dag.deadline <= self.time_stamp:
+                print("Failed")
+                quit()
         # i.e we fail to process a dag before the next instance
         # of itself arrives
-        # for dag in dags_in_process:
-            # if dag.deadline <= self.time_stamp:
-                # fail the task
         
         
         #print(self.time_stamp)

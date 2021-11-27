@@ -11,9 +11,13 @@ from Environment import Environment
 def load_from_json(file_name) -> list[DAG]:
     with open(file_name, 'r') as f:
         data = json.load(f)
-        dags = []
+        dags:list[DAG] = []
         for dag_name in data.keys():
             dags.append(DAG(dag_name, data[dag_name]))
+        
+        for dag in dags:
+            for task in dag.task_list:
+                task.add_dag(dag)
         return dags
 
 def scheduler(processor_list:list[Processor], upcomming_tasks:list[TODO], t) -> None:
@@ -93,7 +97,7 @@ def output_csv(processor_list:list[Processor], dag_list:list[DAG], elapsed_time,
 def main():
     dag_list: list[DAG] = load_from_json('testcases/test1.json')
     print(len(dag_list))
-    dag_list = dag_list[:30]
+    dag_list = dag_list[:33]
     #dag_list: list[DAG] = load_from_json('sample.json')
     
     # something that keeps track of what we've done
@@ -101,19 +105,16 @@ def main():
     # schedule = Schedule()
 
     # Initialize the environment
-    processor_list = [Processor(i) for i in range(3)]  
+    processor_list = [Processor(i) for i in range(8)]  
  
     env = Environment(dag_list, processor_list)
+
     start_time = time.time_ns()
+    
     while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:  # Only works when the dags isn't repopulated
         scheduler(processor_list, env.upcomming_tasks, env.time_stamp)
-        
-        # we can take a bigger step if either all the processors are busy
-        # or if we are not able to schedule a new task
-
-        # we can start of with the case of not being able to schedule anythin
-        # due to all the processors being busy
         env.step()
+
     stop_time = time.time_ns()
     exec_time_scheduler = (stop_time - start_time)//1e6  # CHECK? rounding error?
     print("Execution time:", exec_time_scheduler)

@@ -16,7 +16,7 @@ class DAG:
 
         self.is_complete:bool = False
 
-        name_to_task = dict()
+        name_to_task:dict[str, Task] = dict()
         task_names = list(
             filter(lambda s: s[:4] == 'Task', json_dag_data.keys()))
         # Create all tasks

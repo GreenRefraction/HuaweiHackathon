@@ -10,6 +10,7 @@ class TODO:
         self.pref_p = set()
         if pref_p_id is not None:
             self.pref_p.add(pref_p_id)
+        self.dag_deadline:int = task.dag.deadline
 
 class Processor:
 
@@ -56,7 +57,7 @@ class Processor:
         # tick the current task
         self.current_running_task.tick()
         # and tick the dag
-        # self.current_running_task.dag.tick()
+        self.current_running_task.dag.tick()
         
         self.current_running_task = None
         self.is_idle = True

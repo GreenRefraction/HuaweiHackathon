@@ -33,6 +33,9 @@ class Task:
     def add_parent(self, task, weight):
         self.parents.append((task, weight))
 
+    def add_dag(self, dag):
+        self.dag = dag
+
     def tick(self):
         self.is_complete = True
 
