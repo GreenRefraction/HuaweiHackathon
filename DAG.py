@@ -16,6 +16,7 @@ class DAG:
         self.deadline: int = json_dag_data['Deadline']
 
         self.is_complete:bool = False
+        self._failed = False
 
         name_to_task:dict[str, Task] = dict()
         task_names = list(

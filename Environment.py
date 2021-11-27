@@ -53,9 +53,16 @@ class Environment:
             self.processing_dag_list.remove(dag)
         
         for dag in self.processing_dag_list:
-            if dag.arrival_time + dag.deadline <= self.time_stamp:
-                print("Failed", self.time_stamp)
-                quit()
+            if dag.arrival_time + dag.deadline < self.time_stamp:
+                print("Failed")
+                #print(dag)
+                print(self.time_stamp)
+                not_comp = list(filter(lambda t: not t.is_complete, dag.task_list))
+                print(len(not_comp))
+                print("parents", sum([len(t.parents) for t in not_comp]))
+                print("children", sum([len(t.children) for t in not_comp]))
+                dag._failed = True
+                raise Exception()
         # i.e we fail to process a dag before the next instance
         # of itself arrives
         

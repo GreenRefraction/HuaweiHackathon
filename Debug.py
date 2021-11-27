@@ -24,7 +24,8 @@ def scheduler(processor_list:list[Processor], upcomming_tasks:list[TODO], t) -> 
     has_scheduled = False
     # Start any task that is available
     for p_id, processor in enumerate(processor_list):
-        # try to schedule the first task 
+        # try to schedule the first task
+        
         if len(upcomming_tasks) != 0:
             to_sched = upcomming_tasks[0]
         else:
@@ -111,17 +112,20 @@ def main():
     processor_list = [Processor(i) for i in range(8)]  
  
     env = Environment(dag_list, processor_list)
-
-    start_time = time.time_ns()
-    
-    while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:  # Only works when the dags isn't repopulated
+    try:
+        start_time = time.time_ns()
         
-        env.step(scheduler(processor_list, env.upcomming_tasks, env.time_stamp))
-    print(env.counter)
-    stop_time = time.time_ns()
-    exec_time_scheduler = (stop_time - start_time)//1e6  # CHECK? rounding error?
-    print("Execution time:", exec_time_scheduler)
-    output_csv(processor_list, dag_list, exec_time_scheduler, "output_sample.csv")
+        while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:  # Only works when the dags isn't repopulated
+            
+            env.step(scheduler(processor_list, env.upcomming_tasks, env.time_stamp))
+        print(env.counter)
+        stop_time = time.time_ns()
+        exec_time_scheduler = (stop_time - start_time)//1e6  # CHECK? rounding error?
+        print("Execution time:", exec_time_scheduler)
+        output_csv(processor_list, dag_list, exec_time_scheduler, "output_sample.csv")
+    except:
+        #Here we failed the scheduling task
+        pass
 
     return processor_list, dag_list
 

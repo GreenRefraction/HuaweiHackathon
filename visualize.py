@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import sys
 import csv
 import numpy as np
+import Debug
 
 def load_csv(filename):
     with open(filename, 'r') as handle:
@@ -28,15 +29,34 @@ def load_csv(filename):
 
 if __name__ == '__main__':
     filename = "output_sample.csv"
-    schedule, makespan = load_csv(filename)
-    n_cores = len(schedule)
+
+    processor_list, dag_list = Debug.main()
+    makespan = Debug.calc_make_span(processor_list)
+    n_cores = len(processor_list)
+    schedule = []
+    for processor in processor_list:
+        schedule.append(processor.execution_history)
+    
+    dag_types = []
+    failing_dag_idx = None
+    for i, dag in enumerate(dag_list):
+        if dag._type not in dag_types:
+            dag_types.append(dag._type)
+        if dag._failed:
+            failing_dag_idx = i
+
+    n_dags = len(dag_types)
+    type_color_map = plt.cm.get_cmap("hsv", n_dags)
+    id_color_map = plt.cm.get_cmap("hsv", len(dag_list))
+    print(type_color_map(0))
+    print(n_dags)
+    #schedule, makespan = load_csv(filename)
     # Declaring a figure "gnt"
     fig, gnt = plt.subplots()
 
     # Setting Y-axis limits
     ymax = 48
     gnt.set_ylim(0, ymax)
-    print(makespan)
 
     # Setting X-axis limits
     gnt.set_xlim(0, makespan)
@@ -51,14 +71,31 @@ if __name__ == '__main__':
     # Labelling tickes of y-axis
     gnt.set_yticklabels([str(i) for i in range(n_cores)])
 
+
+    index_to_norm_type = [[dag_types.index(dag_list[dag_list.index(filter(lambda d: entry[0] in map(lambda t: int(t.name[4:]), d.task_list), dag_list).__next__())]._type) for entry in processor.execution_history] for processor in processor_list]
+    index_to_norm_id = [[dag_list.index(filter(lambda d: entry[0] in map(lambda t: int(t.name[4:]), d.task_list), dag_list).__next__()) for entry in processor.execution_history] for processor in processor_list]
+    
+
     # Setting graph attribute
     #gnt.grid(True)
-    for i, processor_event_list in enumerate(schedule):
-        for (task_id, task_start_time, task_finish_time) in processor_event_list:
+    for p_id, processor_execution_history in enumerate(schedule):
+        for task_index, (task_id, task_start_time, task_finish_time) in enumerate(processor_execution_history):
             eet = task_finish_time - task_start_time
-            gnt.broken_barh([(task_start_time, eet)], (i*dy, dy-1))
+            dag = dag_list[index_to_norm_id[p_id][task_index]]
+            fc = id_color_map(index_to_norm_id[p_id][task_index])
+            if dag._failed:
+                fc = 'black'
+            ec = type_color_map(index_to_norm_type[p_id][task_index])
+            
+            gnt.broken_barh([(task_start_time, eet)], (p_id*dy, dy-1), facecolor=ec, edgecolor=fc, linewidth=1)
             x_c = task_start_time + eet/4
-            y_c = i*dy + dy/2
-            gnt.text(x_c, y_c, str(task_id))
+            y_c = p_id*dy + dy/2
+            #gnt.text(x_c, y_c, str(task_id))
+    
+    for i, dag in enumerate(dag_list):
+        deadline_line_color = id_color_map(i) 
+        if dag._failed: deadline_line_color = 'black'
+        t = dag.arrival_time + dag.deadline
+        plt.plot([t,t], [-10, ymax+10], color=deadline_line_color, linewidth=2)
     plt.show()
     
