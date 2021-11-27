@@ -439,20 +439,6 @@ def utility_func(makespan, worst_case, PN_std):
 
 
 def calc_std_deviation(processor_list: list[Processor], end_time):
-<<<<<<< HEAD
-    N = len(processor_list)
-    mean = 0
-    for processor in processor_list:
-        pn = processor.utilization_time/end_time
-        # print(pn)
-        mean += pn / N
-    std = 0
-    for processor in processor_list:
-        pn = processor.utilization_time/end_time
-        std += ((pn - mean)**2)/N
-    return math.sqrt(std)
-
-=======
     # N = len(processor_list) - 1
     # mean = 0
     # for processor in processor_list:
@@ -464,7 +450,6 @@ def calc_std_deviation(processor_list: list[Processor], end_time):
     #     pn = processor.utilization_time/end_time
     #     std += ((pn - mean)**2)/N
     # return math.sqrt(std)
->>>>>>> oxel-deadlines
     """
     s² = (sum (xi - x_mean)²)/(n-1)
     """
@@ -500,10 +485,6 @@ def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_tim
 def main(input_filename: str, output_filename: str, n_processors: int = 8):
     dag_list: list[DAG] = load_from_json(input_filename)
     print(len(dag_list))
-<<<<<<< HEAD
-    # dag_list: list[DAG] = load_from_json('sample.json')
-=======
->>>>>>> oxel-deadlines
 
     # something that keeps track of what we've done
     # initialze a empty schedule, the history
@@ -515,18 +496,12 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
     env = Environment(dag_list, processor_list)
     try:
         start_time = time.time_ns()
-<<<<<<< HEAD
-        while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:  # Only works when the dags isn't repopulated
-            
-            env.step(scheduler(processor_list, env.upcomming_tasks, env.time_stamp))
-=======
-
         # Only works when the dags isn't repopulated
         while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:
 
             env.step(scheduler(processor_list,
-                               env.upcomming_tasks, env.time_stamp))
->>>>>>> oxel-deadlines
+                               env.upcomming_tasks,
+                               env.time_stamp))
         stop_time = time.time_ns()
         # CHECK? rounding error?
         exec_time_scheduler = (stop_time - start_time)//1e6
@@ -542,7 +517,6 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
 
 if __name__ == '__main__':
 
-<<<<<<< HEAD
     """dag_list = load_from_json("sample.json")
     execution_history0 = [(0, 0, 10),(3, 43, 53),(1000, 60, 69),(1003, 99, 108)]
     execution_history1 = [(1, 11, 31), (1001, 70, 88)]
@@ -567,21 +541,13 @@ if __name__ == '__main__':
 
 
     testcases = [f"test{i}.json" for i in range(1, 13)]
-=======
-    testcases = [f"test{i+1}.json" for i in range(0, 12)]
-    print(testcases)
->>>>>>> oxel-deadlines
+
     for i, test in enumerate(testcases):
         processor_list, dag_list = main("testcases/"+test,
                                         f"answer{i+1}.csv",
                                         n_processors=8 if i < 6 else 6)
         make_span = calc_make_span(processor_list)
         print(f"Case {i+1}")
-<<<<<<< HEAD
         #print([processor.utilization_time/make_span for processor in processor_list])
         #print()
-=======
-        print([processor.utilization_time/make_span for processor in processor_list])
-        print()
 
->>>>>>> oxel-deadlines
