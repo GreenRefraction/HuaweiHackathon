@@ -375,6 +375,29 @@ def scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t) -
                 break
     return has_scheduled
 
+def rbfs_scheduler(processor_list:list[Processor], upcomming_tasks:list[TODO], t, real_start_time):
+    # the goal here is to use a heuristic to evaluate each action that the scheduler is taking
+    # maybe combine this with a bfs search, but idk if this is thesible
+
+    # initialize a matrix (n_processors, n_tasks) of heuristic values Q
+    # 
+    # foreach processor:
+        # if processor is not idle:
+            # Q[processor, a] = -infinity
+            # continue
+        # foreach task:
+            # Q[processor, task] = heuristic(processor, todo)
+    # then the optimal action according to Q would be 
+    # (processor, todo) = argmax(Q)
+    # once we've taken that action the Q function would have to be reevaluated
+    # 
+    
+    pass
+
+def heuristic(processor:Processor, todo:TODO):
+    # Evaluate the action of taking the task todo and scheduling it to this processor
+
+    pass
 
 def pop_task_from_list(task_to_remove: TODO, upcomming_tasks: list[TODO], t: int, p_id: int):
     # before we delete the task[idx] we want to append the children of that task to the upcomming tasks list
@@ -473,12 +496,13 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
     env = Environment(dag_list, processor_list)
     try:
         start_time = time.time_ns()
-
+        
         # Only works when the dags isn't repopulated
         while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:
 
             env.step(scheduler(processor_list,
-                               env.upcomming_tasks, env.time_stamp))
+                               env.upcomming_tasks,
+                               env.time_stamp))
         stop_time = time.time_ns()
         # CHECK? rounding error?
         exec_time_scheduler = (stop_time - start_time)//1e6
@@ -494,14 +518,38 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
 
 if __name__ == '__main__':
 
-    testcases = [f"test{i+1}.json" for i in range(0, 12)]
-    print(testcases)
+
+    """dag_list = load_from_json("sample.json")
+    execution_history0 = [(0, 0, 10),(3, 43, 53),(1000, 60, 69),(1003, 99, 108)]
+    execution_history1 = [(1, 11, 31), (1001, 70, 88)]
+    execution_history2 = [(2, 12, 42), (1002, 71, 98)]
+
+    processor_list = [Processor(i) for i in range(3)]
+    processor_list[0].execution_history = execution_history0
+    processor_list[0].utilization_time = 10+10+9+9
+    processor_list[1].execution_history = execution_history1
+    processor_list[1].utilization_time = 20+18
+    processor_list[2].execution_history = execution_history2
+    processor_list[2].utilization_time = 30+27
+
+    make_span = calc_make_span(processor_list)
+    
+    worst_case_makespan = worst_case(dag_list)
+    pn_std = calc_std_deviation(processor_list, make_span)
+    utility = utility_func(make_span, worst_case_makespan, pn_std)
+    print(pn_std)
+    print(utility)
+    quit()"""
+
+
+    testcases = [f"test{i}.json" for i in range(1, 13)]
+
     for i, test in enumerate(testcases):
         processor_list, dag_list = main("testcases/"+test,
                                         f"answer{i+1}.csv",
                                         n_processors=8 if i < 6 else 6)
         make_span = calc_make_span(processor_list)
         print(f"Case {i+1}")
-        print([processor.utilization_time/make_span for processor in processor_list])
-        print()
 
+        #print([processor.utilization_time/make_span for processor in processor_list])
+        #print()
