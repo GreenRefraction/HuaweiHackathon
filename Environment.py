@@ -15,7 +15,7 @@ class Environment:
         self.upcomming_tasks:list[Task] = [] 
         self.time_stamp:int = 0
         while len(self.dag_arrival) != 0 and self.dag_arrival[0].arrival_time <= self.time_stamp:
-            print(self.dag_arrival[0].arrival_time, self.time_stamp)
+            #print(self.dag_arrival[0].arrival_time, self.time_stamp)
             self.upcomming_tasks.extend([TODO(t, self.time_stamp, None) for t in self.dag_arrival[0].entry_tasks])
             self.dag_arrival.pop(0)
 

@@ -110,5 +110,5 @@ class Processor:
         self.execution_history.append((task_id, todo.finish_time - eet , todo.finish_time))
 
         # add the eet to utilization_time
-        self.utilization_time += eet + ict if pay_the_fee else eet
+        self.utilization_time += eet
         return True
