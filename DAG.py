@@ -9,6 +9,7 @@ class DAG:
 
         self.task_list: list[Task] = list()
         self.entry_tasks: list[Task] = list()  # Tasks without parents
+        self.exit_tasks:list[Task] = list()
 
         self._type: int = json_dag_data['Type']
         self.arrival_time: int = json_dag_data['ArrivalTime']
@@ -39,12 +40,14 @@ class DAG:
             task = name_to_task[task_name]
             if not len(task.parents) > 0:
                 self.entry_tasks.append(task)
+            if not len(task.children) > 0:
+                self.exit_tasks.append(task)
 
         self.task_list = list(name_to_task.values())
     
     def tick(self) -> None:
         """set is_complete to True if all of the tasks in this dag are complete"""
-        for task in reversed(self.task_list):
+        for task in self.exit_tasks:
             if task.is_complete == False:
                 return
         self.is_complete = True

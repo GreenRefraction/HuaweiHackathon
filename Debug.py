@@ -97,7 +97,7 @@ def output_csv(processor_list:list[Processor], dag_list:list[DAG], elapsed_time,
 def main():
     dag_list: list[DAG] = load_from_json('testcases/test1.json')
     print(len(dag_list))
-    dag_list = dag_list[:33]
+    dag_list = dag_list[:32]
     #dag_list: list[DAG] = load_from_json('sample.json')
     
     # something that keeps track of what we've done
