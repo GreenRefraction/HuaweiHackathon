@@ -109,7 +109,7 @@ class TODO:
         self.task:Task = task
         self.min_start_time:int = min_start_time
         self.finish_time:int = None
-        self.pref_p = set()
+        self.pref_p:set[int] = set()
         if pref_p_id is not None:
             self.pref_p.add(pref_p_id)
         self.dag_deadline:int = task.dag.deadline
@@ -348,14 +348,25 @@ def scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t) -
     has_scheduled = False
     upcomming_tasks.sort(key=lambda todo: todo.task.dag.arrival_time + todo.task.dag.deadline)
     # Start any task that is available
-    for p_id, processor in enumerate(processor_list):
-        # try to schedule the first task
-        for todo in upcomming_tasks:        
-            success = processor.start(todo, t)
+
+    for todo in upcomming_tasks:
+        success = False
+        for p_id in todo.pref_p:
+            success = processor_list[p_id].start(todo, t)
             has_scheduled = has_scheduled or success
             if success:
                 # print(t, p_id, to_sched.task.name)
                 pop_task_from_list(todo, upcomming_tasks, t, p_id)
+                break
+        if success:
+            continue
+        for p_id in set(range(len(processor_list))).difference(todo.pref_p):
+            success = processor_list[p_id].start(todo, t)
+            has_scheduled = has_scheduled or success
+            if success:
+                # print(t, p_id, to_sched.task.name)
+                pop_task_from_list(todo, upcomming_tasks, t, p_id)
+                break
     return has_scheduled
 
 
