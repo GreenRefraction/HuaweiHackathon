@@ -10,7 +10,7 @@ class DAG:
         self.task_list: list[Task] = list()
         self.entry_tasks: list[Task] = list()  # Tasks without parents
 
-        self.instance: int = json_dag_data['Type']
+        self._type: int = json_dag_data['Type']
         self.arrival_time: int = json_dag_data['ArrivalTime']
         self.deadline: int = json_dag_data['Deadline']
 

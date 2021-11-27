@@ -1,3 +1,4 @@
+from os import read
 import matplotlib.pyplot as plt
 import sys
 import csv
@@ -19,14 +20,14 @@ def load_csv(filename):
                 if event == "": break
                 event = event.split(' ')
                 task_id = int(event[0])
-                task_start_time = int(event[1])
-                task_finish_time = int(event[2])
+                task_start_time = int(event[1])/1000
+                task_finish_time = int(event[2])/1000
                 make_span = max(make_span, task_finish_time)
                 schedule[n_cores - 1].append((task_id, task_start_time, task_finish_time))
     return schedule, make_span
 
 if __name__ == '__main__':
-    filename = sys.argv[1]
+    filename = "output_sample.csv"
     schedule, makespan = load_csv(filename)
     n_cores = len(schedule)
     # Declaring a figure "gnt"
@@ -35,6 +36,7 @@ if __name__ == '__main__':
     # Setting Y-axis limits
     ymax = 48
     gnt.set_ylim(0, ymax)
+    print(makespan)
 
     # Setting X-axis limits
     gnt.set_xlim(0, makespan)
@@ -45,21 +47,18 @@ if __name__ == '__main__':
 
     # Setting ticks on y-axis
     dy = ymax/n_cores
-    gnt.set_yticks([15, 25, 35])
+    gnt.set_yticks([dy*i+dy/2 for i in range(n_cores)])
     # Labelling tickes of y-axis
-    gnt.set_yticklabels(['1', '2', '3'])
+    gnt.set_yticklabels([str(i) for i in range(n_cores)])
 
     # Setting graph attribute
     gnt.grid(True)
-
-    # Declaring a bar in schedule
-    gnt.broken_barh([(40, 50)], (30, 10), facecolors =('tab:orange'))
-
-    # Declaring multiple bars in at same level and same width
-    gnt.broken_barh([(110, 10), (150, 10)], (10, 10),
-                            facecolors ='tab:blue')
-
-    gnt.broken_barh([(10, 50), (100, 20), (130, 10)], (20, 10),
-                                        facecolors =('tab:red'))
-
+    for i, processor_event_list in enumerate(schedule):
+        for (task_id, task_start_time, task_finish_time) in processor_event_list:
+            eet = task_finish_time - task_start_time
+            gnt.broken_barh([(task_start_time, eet)], (i*dy, dy-1))
+            x_c = task_start_time + eet/4
+            y_c = i*dy + dy/2
+            gnt.text(x_c, y_c, str(task_id))
     plt.show()
+    
