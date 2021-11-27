@@ -14,26 +14,32 @@ class Environment:
 
         self.upcomming_tasks:list[Task] = [] 
         self.time_stamp:int = 0
-        while self.dag_arrival[0].arrival_time <= self.time_stamp:
+        while len(self.dag_arrival) != 0 and self.dag_arrival[0].arrival_time <= self.time_stamp:
+            print(self.dag_arrival[0].arrival_time, self.time_stamp)
             self.upcomming_tasks.extend([TODO(t, self.time_stamp, None) for t in self.dag_arrival[0].entry_tasks])
             self.dag_arrival.pop(0)
-        
+
+
         self.processor_list:list[Processor] = processor_list
 
+        self.counter = [0, 0, 0, 0]
 
-    def step(self):
-        dt = self.calc_next_time_step()
-        
+
+    def step(self, has_scheduled):
+        dt = self.calc_next_time_step(has_scheduled)
+        self.time_stamp += dt
+
         for processor in self.processor_list:
-            processor.step(self.time_stamp, dt)
+            processor.step(self.time_stamp)
 
         # keep the upcomming_tasks list up to date
-        while len(self.dag_arrival) != 0 and self.dag_arrival[0].arrival_time <= self.time_stamp + dt:
+        while len(self.dag_arrival) != 0 and self.dag_arrival[0].arrival_time <= self.time_stamp:
+            #print(self.dag_arrival[0].arrival_time, self.time_stamp)
             self.upcomming_tasks.extend([TODO(t, self.time_stamp, None) for t in self.dag_arrival[0].entry_tasks])
             dag_to_process = self.dag_arrival.pop(0)
             self.processing_dag_list.append(dag_to_process)
 
-        self.time_stamp += dt
+        
         
         # Now we want to check if we fail the task
 
@@ -48,7 +54,7 @@ class Environment:
         
         for dag in self.processing_dag_list:
             if dag.arrival_time + dag.deadline <= self.time_stamp:
-                print("Failed")
+                print("Failed", self.time_stamp)
                 quit()
         # i.e we fail to process a dag before the next instance
         # of itself arrives
@@ -60,7 +66,8 @@ class Environment:
             return self.dag_arrival[0].arrival_time
         else:
             return None
-    def calc_next_time_step(self):
+
+    def calc_next_time_step(self, has_scheduled):
         # The first scenario is if all the processors are not available
         # i.e they are all busy, we can skip forward to the 
         all_processors_are_busy = True
@@ -76,12 +83,28 @@ class Environment:
         if all_processors_are_busy:
             # step to the time when the first running task is finished
             dt = min_finish_time - self.time_stamp
+            self.counter[0] += 1
             return dt
+        # if there is something arriving in the future
         elif next_arrival_time is not None:
             # the processors are not busy then we can check the arrival time of upcomming dags
+            # jump to the closest dag arival time or task finish time
             next_time_step = min(next_arrival_time, min_finish_time)
             dt = next_time_step - self.time_stamp
+            self.counter[1] += 1
+            return dt
+        # if there is something arriving in the future
+        elif next_arrival_time is None:
+            # the processors are not busy then we can check the arrival time of upcomming dags
+            # jump to the closest dag arival time or task finish time
+            next_time_step = min_finish_time
+            dt = next_time_step - self.time_stamp
+            self.counter[2] += 1
             return dt
         else:
+            
             # by default we take 1 timestep
+            #print(len(self.upcomming_tasks), self.time_stamp)
+            print("If we shouldn't arive here")
+            self.counter[3] += 1
             return 1

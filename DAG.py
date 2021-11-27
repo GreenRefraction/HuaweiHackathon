@@ -22,7 +22,7 @@ class DAG:
             filter(lambda s: s[:4] == 'Task', json_dag_data.keys()))
         # Create all tasks
         for task_name in task_names:
-            task = Task(task_name, self.name, json_dag_data[task_name])
+            task = Task(task_name, self, json_dag_data[task_name])
             name_to_task[task_name] = task
 
         # Connect children and parents

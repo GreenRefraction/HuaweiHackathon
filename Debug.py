@@ -21,6 +21,7 @@ def load_from_json(file_name) -> list[DAG]:
         return dags
 
 def scheduler(processor_list:list[Processor], upcomming_tasks:list[TODO], t) -> None:
+    has_scheduled = False
     # Start any task that is available
     for p_id, processor in enumerate(processor_list):
         # try to schedule the first task 
@@ -29,9 +30,11 @@ def scheduler(processor_list:list[Processor], upcomming_tasks:list[TODO], t) -> 
         else:
             return
         success = processor.start(to_sched, t)
+        has_scheduled = has_scheduled or success
         if success:
             #print(t, p_id, to_sched.task.name)
             pop_task_from_list(to_sched, upcomming_tasks, t, p_id)
+    return has_scheduled
 
 def pop_task_from_list(task_to_remove:TODO, upcomming_tasks:list[TODO], t:int, p_id:int):
     # before we delete the task[idx] we want to append the children of that task to the upcomming tasks list
@@ -97,7 +100,7 @@ def output_csv(processor_list:list[Processor], dag_list:list[DAG], elapsed_time,
 def main():
     dag_list: list[DAG] = load_from_json('testcases/test1.json')
     print(len(dag_list))
-    dag_list = dag_list[:32]
+    dag_list = dag_list[:33]
     #dag_list: list[DAG] = load_from_json('sample.json')
     
     # something that keeps track of what we've done
@@ -112,9 +115,9 @@ def main():
     start_time = time.time_ns()
     
     while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:  # Only works when the dags isn't repopulated
-        scheduler(processor_list, env.upcomming_tasks, env.time_stamp)
-        env.step()
-
+        
+        env.step(scheduler(processor_list, env.upcomming_tasks, env.time_stamp))
+    print(env.counter)
     stop_time = time.time_ns()
     exec_time_scheduler = (stop_time - start_time)//1e6  # CHECK? rounding error?
     print("Execution time:", exec_time_scheduler)

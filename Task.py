@@ -3,7 +3,7 @@ import json
 
 class Task:
     name = None
-    dag_name = None
+    dag = None
     EET = None
     _type = None
     children = None
@@ -11,7 +11,7 @@ class Task:
 
     is_complete:bool = None
 
-    def __init__(self, name, dag_name, json_task_data: dict) -> None:
+    def __init__(self, name, dag, json_task_data: dict) -> None:
         self.name = name
         self.EET = json_task_data['EET']
         self._type = json_task_data['Type']
@@ -20,7 +20,7 @@ class Task:
         self.parents: list[(Task, int)] = list()  # Needed?
 
         self.is_complete:bool = False
-        self.dag_name = dag_name
+        self.dag = dag
 
         self.dag = None
 

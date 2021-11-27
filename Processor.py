@@ -38,11 +38,11 @@ class Processor:
 
         self.execution_history = list()
 
-    def step(self, t, dt):
-        """Take a step forward in time for T seconds"""
+    def step(self, t):
+        """Take a step to time t"""
         if self.is_idle:
             return
-        if self.finish_time_of_running_task <= t + dt:
+        if self.finish_time_of_running_task <= t:
             # finish the current task
             self.finish()
 
