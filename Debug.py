@@ -83,13 +83,6 @@ def output_csv(processor_list:list[Processor], dag_list:list[DAG], elapsed_time,
             # spamwriter.writerow([p_count, processor.execution_history])
             spamwriter.writerow([" ".join([str(e) for e in entry]) for entry in processor.execution_history])
             std_dev = calc_std_deviation(processor_list, makespan)
-    
-        # print(processor.execution_history)
-        # f.write(processor.execution_history)
-    # print(calc_make_span())
-    # print(calc_std_deviation())
-    # print(utility_func())
-    # print(exec_time_scheduler)
         worst_case_val = worst_case(dag_list)
         spamwriter.writerow([makespan])
         spamwriter.writerow([std_dev])
