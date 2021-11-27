@@ -370,6 +370,27 @@ def scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t) -
     return has_scheduled
 
 def rbfs_scheduler(processor_list:list[Processor], upcomming_tasks:list[TODO], t, real_start_time):
+    # the goal here is to use a heuristic to evaluate each action that the scheduler is taking
+    # maybe combine this with a bfs search, but idk if this is thesible
+
+    # initialize a matrix (n_processors, n_tasks) of heuristic values Q
+    # 
+    # foreach processor:
+        # if processor is not idle:
+            # Q[processor, a] = -infinity
+            # continue
+        # foreach task:
+            # Q[processor, task] = heuristic(processor, todo)
+    # then the optimal action according to Q would be 
+    # (processor, todo) = argmax(Q)
+    # once we've taken that action the Q function would have to be reevaluated
+    # 
+    
+    pass
+
+def heuristic(processor:Processor, todo:TODO):
+    # Evaluate the action of taking the task todo and scheduling it to this processor
+
     pass
 
 def pop_task_from_list(task_to_remove: TODO, upcomming_tasks: list[TODO], t: int, p_id: int):
