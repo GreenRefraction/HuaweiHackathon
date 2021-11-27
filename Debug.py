@@ -369,6 +369,8 @@ def scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t) -
                 break
     return has_scheduled
 
+def rbfs_scheduler(processor_list:list[Processor], upcomming_tasks:list[TODO], t, real_start_time):
+    pass
 
 def pop_task_from_list(task_to_remove: TODO, upcomming_tasks: list[TODO], t: int, p_id: int):
     # before we delete the task[idx] we want to append the children of that task to the upcomming tasks list
@@ -410,12 +412,12 @@ def utility_func(makespan, worst_case, PN_std):
 
 
 def calc_std_deviation(processor_list: list[Processor], end_time):
-    N = len(processor_list) - 1
+    N = len(processor_list)
     mean = 0
     for processor in processor_list:
         pn = processor.utilization_time/end_time
-        #print(pn)
-        mean += pn/(N + 1)
+        # print(pn)
+        mean += pn / N
     std = 0
     for processor in processor_list:
         pn = processor.utilization_time/end_time
@@ -449,7 +451,6 @@ def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_tim
 def main(input_filename: str, output_filename: str, n_processors:int=8):
     dag_list: list[DAG] = load_from_json(input_filename)
     print(len(dag_list))
-    #dag_list = dag_list[:35]
     # dag_list: list[DAG] = load_from_json('sample.json')
 
     # something that keeps track of what we've done
@@ -462,7 +463,6 @@ def main(input_filename: str, output_filename: str, n_processors:int=8):
     env = Environment(dag_list, processor_list)
     try:
         start_time = time.time_ns()
-        
         while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:  # Only works when the dags isn't repopulated
             
             env.step(scheduler(processor_list, env.upcomming_tasks, env.time_stamp))
@@ -478,11 +478,34 @@ def main(input_filename: str, output_filename: str, n_processors:int=8):
 
 
 if __name__ == '__main__':
+
+    """dag_list = load_from_json("sample.json")
+    execution_history0 = [(0, 0, 10),(3, 43, 53),(1000, 60, 69),(1003, 99, 108)]
+    execution_history1 = [(1, 11, 31), (1001, 70, 88)]
+    execution_history2 = [(2, 12, 42), (1002, 71, 98)]
+
+    processor_list = [Processor(i) for i in range(3)]
+    processor_list[0].execution_history = execution_history0
+    processor_list[0].utilization_time = 10+10+9+9
+    processor_list[1].execution_history = execution_history1
+    processor_list[1].utilization_time = 20+18
+    processor_list[2].execution_history = execution_history2
+    processor_list[2].utilization_time = 30+27
+
+    make_span = calc_make_span(processor_list)
     
-    testcases = [f"test{i}.json" for i in range(1, 12)]
+    worst_case_makespan = worst_case(dag_list)
+    pn_std = calc_std_deviation(processor_list, make_span)
+    utility = utility_func(make_span, worst_case_makespan, pn_std)
+    print(pn_std)
+    print(utility)
+    quit()"""
+
+
+    testcases = [f"test{i}.json" for i in range(1, 13)]
     for i, test in enumerate(testcases):
         processor_list, dag_list = main("testcases/"+test, f"answer{i+1}.csv", n_processors= 8 if i < 6 else 6)
         make_span = calc_make_span(processor_list)
         print(f"Case {i+1}")
-        print([processor.utilization_time/make_span for processor in processor_list])
-        print()
+        #print([processor.utilization_time/make_span for processor in processor_list])
+        #print()
