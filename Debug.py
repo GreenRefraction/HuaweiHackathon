@@ -2,9 +2,14 @@ import json
 import time
 import csv
 import math
-#from DAG import DAG
-#from Processor import Processor, TODO
-#from Environment import Environment
+# from DAG import DAG
+# from Processor import Processor, TODO
+# from Environment import Environment
+
+
+class FailedToScheduleException(Exception):
+    pass
+
 
 class Task:
     name = None
@@ -14,7 +19,7 @@ class Task:
     children = None
     parents = None
 
-    is_complete:bool = None
+    is_complete: bool = None
 
     def __init__(self, name, dag, json_task_data: dict) -> None:
         self.name = name
@@ -24,7 +29,7 @@ class Task:
         self.children: list[(Task, int)] = list()
         self.parents: list[(Task, int)] = list()  # Needed?
 
-        self.is_complete:bool = False
+        self.is_complete: bool = False
         self.dag = dag
 
         self.dag = None
@@ -45,7 +50,7 @@ class Task:
         self.is_complete = True
 
     def __str__(self) -> str:
-        return json.dumps(str(self.__dict__), default=lambda o:o.name if type(o) == Task else str(o.__dict__))
+        return json.dumps(str(self.__dict__), default=lambda o: o.name if type(o) == Task else str(o.__dict__))
 
 
 class DAG:
@@ -56,16 +61,16 @@ class DAG:
 
         self.task_list: list[Task] = list()
         self.entry_tasks: list[Task] = list()  # Tasks without parents
-        self.exit_tasks:list[Task] = list()
+        self.exit_tasks: list[Task] = list()
 
         self._type: int = json_dag_data['Type']
         self.arrival_time: int = json_dag_data['ArrivalTime']
         self.deadline: int = json_dag_data['Deadline']
 
-        self.is_complete:bool = False
+        self.is_complete: bool = False
         self._failed = False
 
-        name_to_task:dict[str, Task] = dict()
+        name_to_task: dict[str, Task] = dict()
         task_names = list(
             filter(lambda s: s[:4] == 'Task', json_dag_data.keys()))
         # Create all tasks
@@ -92,13 +97,14 @@ class DAG:
                 self.exit_tasks.append(task)
 
         self.task_list = list(name_to_task.values())
-    
+
     def tick(self) -> None:
         """set is_complete to True if all of the tasks in this dag are complete"""
         for task in self.exit_tasks:
             if task.is_complete == False:
                 return
         self.is_complete = True
+
     def __str__(self) -> str:
         return json.dumps(self.__dict__, default=lambda o: str(o) if type(o) == Task else o.__dict__, indent=4)
 
@@ -106,33 +112,33 @@ class DAG:
 class TODO:
     def __init__(self, task, min_start_time, pref_p_id):
         self.done = False
-        self.task:Task = task
-        self.min_start_time:int = min_start_time
-        self.finish_time:int = None
-        self.pref_p:set[int] = set()
+        self.task: Task = task
+        self.min_start_time: int = min_start_time
+        self.finish_time: int = None
+        self.pref_p: set[int] = set()
         if pref_p_id is not None:
             self.pref_p.add(pref_p_id)
-        self.dag_deadline:int = task.dag.deadline
+        self.dag_deadline: int = task.dag.deadline
 
 
 class Processor:
 
-    current_running_task:Task = None
-    is_idle:bool = None
-    finish_time_of_running_task:int = None
-    utilization_time:int = None
+    current_running_task: Task = None
+    is_idle: bool = None
+    finish_time_of_running_task: int = None
+    utilization_time: int = None
 
     cache_size = 4
-    cache:list[Task] = list()
+    cache: list[Task] = list()
 
-    # This set contains the answer of a task which is 
+    # This set contains the answer of a task which is
     # idk what to call this
-    answers:set[Task] = None
+    answers: set[Task] = None
     # some sort of history of what tasks that were scheduled
-    execution_history:list[tuple[int, int, int]] = None
+    execution_history: list[tuple[int, int, int]] = None
 
-    def __init__(self, id:int) -> None:
-        self.id:int = id
+    def __init__(self, id: int) -> None:
+        self.id: int = id
         self.cache = list()
         self.utilization_time = 0
 
@@ -149,7 +155,6 @@ class Processor:
             # finish the current task
             self.finish()
 
-            
     def finish(self):
         """Finish the task that is currently running"""
         # append to the cache
@@ -161,27 +166,26 @@ class Processor:
         self.current_running_task.tick()
         # and tick the dag
         self.current_running_task.dag.tick()
-        
+
         self.current_running_task = None
         self.is_idle = True
         self.finish_time_of_running_task = None
 
-
-    def start(self, todo:TODO, t) -> bool:
+    def start(self, todo: TODO, t) -> bool:
         """attempt to start a new task"""
 
         if not self.is_idle:
             return False
         # check if the parents of the task is finished
-        
+
         if todo.min_start_time > t:
             return False
         for (parent, ict) in todo.task.parents:
             if parent.is_complete != True:
                 return False
         # First check the communication time
-        ict_list:list[int] = []
-        pay_the_fee:bool = False
+        ict_list: list[int] = []
+        pay_the_fee: bool = False
         for (parent, ict) in todo.task.parents:
             ict_list.append(ict)
             if parent not in self.answers:
@@ -200,9 +204,9 @@ class Processor:
         # if task has the same _type we can reduce the EET by 10%
         eet = todo.task.EET
         if todo.task._type in [cached_task._type for cached_task in self.cache]:
-            eet = int(eet * 0.9) # CHECK? rounding error?
+            eet = int(eet * 0.9)  # CHECK? rounding error?
             #print(t, "new instance", eet, todo.task.dag_id)
-        
+
         self.finish_time_of_running_task = t + eet
         if pay_the_fee:
             self.finish_time_of_running_task += ict
@@ -210,7 +214,8 @@ class Processor:
 
         # call on the execution history
         task_id = int(todo.task.name[4:])
-        self.execution_history.append((task_id, todo.finish_time - eet , todo.finish_time))
+        self.execution_history.append(
+            (task_id, todo.finish_time - eet, todo.finish_time))
 
         # add the eet to utilization_time
         self.utilization_time += eet + ict if pay_the_fee else eet
@@ -219,25 +224,24 @@ class Processor:
 
 class Environment:
 
-    def __init__(self, dag_list:list[DAG], processor_list:list[Processor]) -> None:
-        self.dag_list   :list[DAG] = dag_list
-        self.dag_arrival:list[DAG] = sorted(dag_list, key = lambda d: d.arrival_time)
-        
+    def __init__(self, dag_list: list[DAG], processor_list: list[Processor]) -> None:
+        self.dag_list: list[DAG] = dag_list
+        self.dag_arrival: list[DAG] = sorted(
+            dag_list, key=lambda d: d.arrival_time)
 
-        self.processing_dag_list:list[DAG] = list()
+        self.processing_dag_list: list[DAG] = list()
 
-        self.upcomming_tasks:list[Task] = [] 
-        self.time_stamp:int = 0
+        self.upcomming_tasks: list[Task] = []
+        self.time_stamp: int = 0
         while len(self.dag_arrival) != 0 and self.dag_arrival[0].arrival_time <= self.time_stamp:
             #print(self.dag_arrival[0].arrival_time, self.time_stamp)
-            self.upcomming_tasks.extend([TODO(t, self.time_stamp, None) for t in self.dag_arrival[0].entry_tasks])
+            self.upcomming_tasks.extend(
+                [TODO(t, self.time_stamp, None) for t in self.dag_arrival[0].entry_tasks])
             self.dag_arrival.pop(0)
 
-
-        self.processor_list:list[Processor] = processor_list
+        self.processor_list: list[Processor] = processor_list
 
         self.counter = [0, 0, 0, 0]
-
 
     def step(self, has_scheduled):
         dt = self.calc_next_time_step(has_scheduled)
@@ -249,39 +253,39 @@ class Environment:
         # keep the upcomming_tasks list up to date
         while len(self.dag_arrival) != 0 and self.dag_arrival[0].arrival_time <= self.time_stamp:
             #print(self.dag_arrival[0].arrival_time, self.time_stamp)
-            self.upcomming_tasks.extend([TODO(t, self.time_stamp, None) for t in self.dag_arrival[0].entry_tasks])
+            self.upcomming_tasks.extend(
+                [TODO(t, self.time_stamp, None) for t in self.dag_arrival[0].entry_tasks])
             dag_to_process = self.dag_arrival.pop(0)
             self.processing_dag_list.append(dag_to_process)
 
-        
-        
         # Now we want to check if we fail the task
 
-        # this list contains dags that can be removed from 
-        dags_to_remove:list[DAG] = list()
+        # this list contains dags that can be removed from
+        dags_to_remove: list[DAG] = list()
         for dag in self.processing_dag_list:
             if dag.is_complete:
                 dags_to_remove.append(dag)
         # remove the completed dags from the currently running dags
         for dag in dags_to_remove:
             self.processing_dag_list.remove(dag)
-        
+
         for dag in self.processing_dag_list:
             if dag.arrival_time + dag.deadline < self.time_stamp:
                 print("Failed")
-                #print(dag)
+                # print(dag)
                 print(self.time_stamp)
-                not_comp = list(filter(lambda t: not t.is_complete, dag.task_list))
+                not_comp = list(
+                    filter(lambda t: not t.is_complete, dag.task_list))
                 print(len(not_comp))
                 print("parents", sum([len(t.parents) for t in not_comp]))
                 print("children", sum([len(t.children) for t in not_comp]))
                 dag._failed = True
-                raise Exception()
+                raise FailedToScheduleException()
         # i.e we fail to process a dag before the next instance
         # of itself arrives
-        
-        
-        #print(self.time_stamp)
+
+        # print(self.time_stamp)
+
     def get_next_arrival_time(self) -> int:
         if len(self.dag_arrival) != 0:
             return self.dag_arrival[0].arrival_time
@@ -290,15 +294,16 @@ class Environment:
 
     def calc_next_time_step(self, has_scheduled):
         # The first scenario is if all the processors are not available
-        # i.e they are all busy, we can skip forward to the 
+        # i.e they are all busy, we can skip forward to the
         all_processors_are_busy = True
         min_finish_time = 1e100
         for processor in self.processor_list:
             if processor.is_idle:
                 # if one processor is idle, then all processors are not busy
                 all_processors_are_busy = False
-            else:            
-                min_finish_time = min(processor.finish_time_of_running_task, min_finish_time)
+            else:
+                min_finish_time = min(
+                    processor.finish_time_of_running_task, min_finish_time)
         next_arrival_time = self.get_next_arrival_time()
 
         if all_processors_are_busy:
@@ -323,7 +328,7 @@ class Environment:
             self.counter[2] += 1
             return dt
         else:
-            
+
             # by default we take 1 timestep
             #print(len(self.upcomming_tasks), self.time_stamp)
             print("If we shouldn't arive here")
@@ -346,7 +351,8 @@ def load_from_json(file_name) -> list[DAG]:
 
 def scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t) -> None:
     has_scheduled = False
-    upcomming_tasks.sort(key=lambda todo: todo.task.dag.arrival_time + todo.task.dag.deadline)
+    upcomming_tasks.sort(
+        key=lambda todo: todo.task.dag.arrival_time + todo.task.dag.deadline)
     # Start any task that is available
 
     for todo in upcomming_tasks:
@@ -408,7 +414,7 @@ def pop_task_from_list(task_to_remove: TODO, upcomming_tasks: list[TODO], t: int
     upcomming_tasks.remove(task_to_remove)
 
 
-def worst_case(dag_list:list[DAG]):
+def worst_case(dag_list: list[DAG]):
     sum = 0
     for dag in dag_list:
         for task in dag.task_list:
@@ -433,21 +439,28 @@ def utility_func(makespan, worst_case, PN_std):
 
 
 def calc_std_deviation(processor_list: list[Processor], end_time):
-    N = len(processor_list)
-    mean = 0
-    for processor in processor_list:
-        pn = processor.utilization_time/end_time
-        # print(pn)
-        mean += pn / N
-    std = 0
-    for processor in processor_list:
-        pn = processor.utilization_time/end_time
-        std += ((pn - mean)**2)/N
-    return math.sqrt(std)
-
+    # N = len(processor_list) - 1
+    # mean = 0
+    # for processor in processor_list:
+    #     pn = processor.utilization_time/end_time
+    #     # print(pn)
+    #     mean += pn/(N + 1)
+    # std = 0
+    # for processor in processor_list:
+    #     pn = processor.utilization_time/end_time
+    #     std += ((pn - mean)**2)/N
+    # return math.sqrt(std)
     """
     s² = (sum (xi - x_mean)²)/(n-1)
     """
+    ut = [p.utilization_time for p in processor_list]
+    norm_ut = list(map(lambda u: u/end_time, ut))
+    mean_ut = sum(norm_ut) / len(norm_ut)
+    s = sum(map(lambda xi: (xi - mean_ut)**2, norm_ut))
+    s /= len(norm_ut)-1
+
+    return math.sqrt(s)
+
 
 def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_time, filename):
     std_dev = None
@@ -469,10 +482,9 @@ def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_tim
         spamwriter.writerow([int(elapsed_time)])
 
 
-def main(input_filename: str, output_filename: str, n_processors:int=8):
+def main(input_filename: str, output_filename: str, n_processors: int = 8):
     dag_list: list[DAG] = load_from_json(input_filename)
     print(len(dag_list))
-    # dag_list: list[DAG] = load_from_json('sample.json')
 
     # something that keeps track of what we've done
     # initialze a empty schedule, the history
@@ -484,21 +496,28 @@ def main(input_filename: str, output_filename: str, n_processors:int=8):
     env = Environment(dag_list, processor_list)
     try:
         start_time = time.time_ns()
-        while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:  # Only works when the dags isn't repopulated
-            
-            env.step(scheduler(processor_list, env.upcomming_tasks, env.time_stamp))
+        
+        # Only works when the dags isn't repopulated
+        while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:
+
+            env.step(scheduler(processor_list,
+                               env.upcomming_tasks,
+                               env.time_stamp))
         stop_time = time.time_ns()
-        exec_time_scheduler = (stop_time - start_time)//1e6  # CHECK? rounding error?
+        # CHECK? rounding error?
+        exec_time_scheduler = (stop_time - start_time)//1e6
         print("Execution time:", exec_time_scheduler)
-        output_csv(processor_list, dag_list, exec_time_scheduler, output_filename)
-    except:
-        #Here we failed the scheduling task
+        output_csv(processor_list, dag_list,
+                   exec_time_scheduler, output_filename)
+    except FailedToScheduleException:
+        # Here we failed the scheduling task
         pass
 
     return processor_list, dag_list
 
 
 if __name__ == '__main__':
+
 
     """dag_list = load_from_json("sample.json")
     execution_history0 = [(0, 0, 10),(3, 43, 53),(1000, 60, 69),(1003, 99, 108)]
@@ -524,9 +543,13 @@ if __name__ == '__main__':
 
 
     testcases = [f"test{i}.json" for i in range(1, 13)]
+
     for i, test in enumerate(testcases):
-        processor_list, dag_list = main("testcases/"+test, f"answer{i+1}.csv", n_processors= 8 if i < 6 else 6)
+        processor_list, dag_list = main("testcases/"+test,
+                                        f"answer{i+1}.csv",
+                                        n_processors=8 if i < 6 else 6)
         make_span = calc_make_span(processor_list)
         print(f"Case {i+1}")
+
         #print([processor.utilization_time/make_span for processor in processor_list])
         #print()
