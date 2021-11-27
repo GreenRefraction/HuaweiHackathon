@@ -14,6 +14,8 @@ class DAG:
         self.arrival_time: int = json_dag_data['ArrivalTime']
         self.deadline: int = json_dag_data['Deadline']
 
+        self.is_complete:bool = False
+
         name_to_task = dict()
         task_names = list(
             filter(lambda s: s[:4] == 'Task', json_dag_data.keys()))
@@ -39,6 +41,12 @@ class DAG:
                 self.entry_tasks.append(task)
 
         self.task_list = list(name_to_task.values())
-
+    
+    def tick(self) -> None:
+        """set is_complete to True if all of the tasks in this dag are complete"""
+        for task in reversed(self.task_list):
+            if task.is_complete == False:
+                return
+        self.is_complete = True
     def __str__(self) -> str:
         return json.dumps(self.__dict__, default=lambda o: str(o) if type(o) == Task else o.__dict__, indent=4)

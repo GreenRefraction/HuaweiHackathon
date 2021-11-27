@@ -1,4 +1,6 @@
 from Task import Task
+
+
 class TODO:
     def __init__(self, task, min_start_time, pref_p_id):
         self.done = False
@@ -8,8 +10,6 @@ class TODO:
         self.pref_p = set()
         if pref_p_id is not None:
             self.pref_p.add(pref_p_id)
-
-
 
 class Processor:
 
@@ -42,16 +42,26 @@ class Processor:
         if self.is_idle:
             return
         if self.finish_time_of_running_task <= t + dt:
-            # append to the cache
-            #print(t, self.current_running_task.name, "Finished")
-            self.cache.append(self.current_running_task)
-            self.current_running_task.is_complete = True
-            if len(self.cache) > self.cache_size:
-                self.cache.pop(0)
             # finish the current task
-            self.current_running_task = None
-            self.is_idle = True
-            self.finish_time_of_running_task = None
+            self.finish()
+
+            
+    def finish(self):
+        """Finish the task that is currently running"""
+        # append to the cache
+        self.cache.append(self.current_running_task)
+        if len(self.cache) > self.cache_size:
+            self.cache.pop(0)
+
+        # tick the current task
+        self.current_running_task.tick()
+        # and tick the dag
+        # self.current_running_task.dag.tick()
+        
+        self.current_running_task = None
+        self.is_idle = True
+        self.finish_time_of_running_task = None
+
 
     def start(self, todo:TODO, t) -> bool:
         """attempt to start a new task"""

@@ -8,6 +8,8 @@ class Environment:
     def __init__(self, dag_list:list[DAG], processor_list:list[Processor]) -> None:
         self.dag_list   :list[DAG] = dag_list
         self.dag_arrival:list[DAG] = sorted(dag_list, key = lambda d: d.arrival_time)
+        self.processing_dag_list:list[str] = list()
+
         self.upcomming_tasks:list[Task] = [] 
         self.time_stamp:int = 0
         while self.dag_arrival[0].arrival_time <= self.time_stamp:
@@ -23,14 +25,22 @@ class Environment:
         for processor in self.processor_list:
             processor.step(self.time_stamp, dt)
 
-        # this code reintroduces dags with a certain period
-        while len(self.dag_arrival) != 0 and self.dag_arrival[0].arrival_time <= self.time_stamp+dt:
+        # keep the upcomming_tasks list up to date
+        while len(self.dag_arrival) != 0 and self.dag_arrival[0].arrival_time <= self.time_stamp + dt:
             self.upcomming_tasks.extend([TODO(t, self.time_stamp, None) for t in self.dag_arrival[0].entry_tasks])
-            #self.dag_arrival[0].arrival_time += self.dag_arrival[0].deadline
-            #self.dag_arrival.append(self.dag_arrival[0])
-            self.dag_arrival.pop(0)
-            #self.dag_arrival.sort(key = lambda d: d.arrival_time)  # Can be done faster
+            dag_to_process = self.dag_arrival.pop(0)
+            self.processing_dag_list.append(dag_to_process)
+
         self.time_stamp += dt
+        
+        # Now we want to check if we fail the task
+        # i.e we fail to process a dag before the next instance
+        # of itself arrives
+        # for dag in dags_in_process:
+            # if dag.deadline <= self.time_stamp:
+                # fail the task
+        
+        
         #print(self.time_stamp)
     def get_next_arrival_time(self) -> int:
         if len(self.dag_arrival) != 0:

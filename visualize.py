@@ -52,7 +52,7 @@ if __name__ == '__main__':
     gnt.set_yticklabels([str(i) for i in range(n_cores)])
 
     # Setting graph attribute
-    gnt.grid(True)
+    #gnt.grid(True)
     for i, processor_event_list in enumerate(schedule):
         for (task_id, task_start_time, task_finish_time) in processor_event_list:
             eet = task_finish_time - task_start_time

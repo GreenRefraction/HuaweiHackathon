@@ -1,12 +1,13 @@
 import json
 
+
 class Task:
     name = None
+    dag_name = None
     EET = None
     _type = None
     children = None
     parents = None
-    dag_id = None
 
     is_complete:bool = None
 
@@ -19,7 +20,9 @@ class Task:
         self.parents: list[(Task, int)] = list()  # Needed?
 
         self.is_complete:bool = False
-        self.dag_id = dag_name
+        self.dag_name = dag_name
+
+        self.dag = None
 
     # from the list of parents, find the max eet for this task
     # and that would be the starting time for this task.
@@ -29,6 +32,9 @@ class Task:
 
     def add_parent(self, task, weight):
         self.parents.append((task, weight))
+
+    def tick(self):
+        self.is_complete = True
 
     def __str__(self) -> str:
         return json.dumps(str(self.__dict__), default=lambda o:o.name if type(o) == Task else str(o.__dict__))
