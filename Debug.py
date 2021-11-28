@@ -2,6 +2,7 @@ import json
 import time
 import csv
 import math
+import numpy as np
 # from DAG import DAG
 # from Processor import Processor, TODO
 # from Environment import Environment
@@ -32,7 +33,7 @@ class Task:
         self.is_complete: bool = False
         self.dag = dag
 
-        self.dag = None
+        self.finish_time = None
 
     # from the list of parents, find the max eet for this task
     # and that would be the starting time for this task.
@@ -193,13 +194,16 @@ class Processor:
             if parent not in self.answers:  # cleaning might speed up things, it will sure as hell save memory
                 # now we need to pay the ict fee
                 pay_the_fee = True
-                ict_list.append(ict)
+                ict_list.append(max(0, parent.finish_time - t + ict))
+                # ict_list.append(ict)
             # else:
                 # remove the parent from the answers set
                 # self.answers.remove(parent)  Not desired because one task can have several childs on the same CPU
         # the else statement will only trigger if the task is an entry task
         # i.e it has not parent, which means we dont pay the fee
         ict = max(ict_list) if len(ict_list) != 0 else 0
+        # This needs to be changed to replicate
+        # (parentFinishTime + communicationTime * (processors of parent and child are different)
 
         self.current_running_task = todo.task
         self.is_idle = False
@@ -214,6 +218,7 @@ class Processor:
         if pay_the_fee:
             self.finish_time_of_running_task += ict
         todo.finish_time = self.finish_time_of_running_task
+        todo.task.finish_time = todo.finish_time  # TODO MARK CHECK THING
 
         # call on the execution history
         task_id = int(todo.task.name[4:])
@@ -504,9 +509,13 @@ def calc_std_deviation(processor_list: list[Processor], end_time):
     norm_ut = list(map(lambda u: u/end_time, ut))
     mean_ut = sum(norm_ut) / len(norm_ut)
     s = sum(map(lambda xi: (xi - mean_ut)**2, norm_ut))
-    s /= len(norm_ut)-1
+    # s /= len(norm_ut)-1
+    s /= len(norm_ut)
 
     return math.sqrt(s)
+    # ut = [p.utilization_time for p in processor_list]
+    # norm_ut = list(map(lambda u: u/end_time, ut))
+    # return np.std(norm_ut)
 
 
 def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_time, filename):
@@ -547,8 +556,8 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
         while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:
 
             env.step(sdf_scheduler(processor_list,
-                                   env.upcomming_tasks,
-                                   env.time_stamp))
+                                     env.upcomming_tasks,
+                                     env.time_stamp))
         stop_time = time.time_ns()
         # CHECK? rounding error?
         exec_time_scheduler = (stop_time - start_time)//1e6
