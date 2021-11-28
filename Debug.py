@@ -12,27 +12,21 @@ class FailedToScheduleException(Exception):
 
 
 class Task:
-    name = None
-    dag = None
-    EET = None
-    _type = None
-    children = None
-    parents = None
-
-    is_complete: bool = None
-
     def __init__(self, name, dag, json_task_data: dict) -> None:
         self.name = name
         self.EET = json_task_data['EET']
         self._type = json_task_data['Type']
 
         self.children: list[(Task, int)] = list()
-        self.parents: list[(Task, int)] = list()  # Needed?
+        self.parents: list[(Task, int)] = list()
 
         self.is_complete: bool = False
         self.dag = dag
 
         self.finish_time = None
+        self.is_complete: bool = None
+        self.effective_depth: int = None
+        self.norm_effective_depth: int = None
 
     # from the list of parents, find the max eet for this task
     # and that would be the starting time for this task.
@@ -49,13 +43,24 @@ class Task:
     def tick(self):
         self.is_complete = True
 
+    def calc_effective_depth(self):
+        if self.effective_depth is not None:
+            self.effective_depth
+            
+        self.effective_depth = self.EET
+        max_child_depth = 0
+        for (c, _) in self.children:
+            max_child_depth = max(max_child_depth, c.calc_effective_depth())
+
+        self.effective_depth += max_child_depth
+        self.norm_effective_depth = self.effective_depth / self.dag.deadline
+        return self.effective_depth
+
     def __str__(self) -> str:
         return json.dumps(str(self.__dict__), default=lambda o: o.name if type(o) == Task else str(o.__dict__))
 
 
 class DAG:
-    name = None
-
     def __init__(self, name, json_dag_data: dict) -> None:
         self.name = name
 
@@ -95,6 +100,12 @@ class DAG:
                 self.entry_tasks.append(task)
             if not len(task.children) > 0:
                 self.exit_tasks.append(task)
+        
+        # Calculate task depth
+        self.max_depth: int = 0
+        for task in self.entry_tasks:
+            task.calc_effective_depth()
+            self.max_depth = max(task.effective_depth, self.max_depth)
 
         self.task_list = list(name_to_task.values())
 
@@ -412,12 +423,17 @@ def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[T
 
 
 def heuristic(todo: TODO, time: int):
-    h0 = -(todo.task.dag.arrival_time + todo.task.dag.deadline)
+    # Time until deadline
+    h0 = -(todo.task.dag.arrival_time + todo.task.dag.deadline - time)
+    # Max posible communication penalty (ict)
     h1 = 0
     for p_id, ict, ft in todo.pref_p:
         h1 = max(h1, ft + ict - time)
+    # execution time left of the dags longest path from todo.task 
+    # h2 = todo.task.norm_effective_depth  # normalized with the deadline of dag
+    h2 = todo.task.effective_depth
 
-    h = 10*h0 + h1
+    h = 10*h0 + h1 + 5*h2
     # print(todo.task.name, h)
     return h
     # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
