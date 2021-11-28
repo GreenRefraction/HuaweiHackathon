@@ -35,7 +35,7 @@ if __name__ == '__main__':
     filename = "output_sample.csv"
 
     processor_list, dag_list, env = Debug.main(
-        "testcases/test11.json", "answer11.csv", 6)
+        "testcases/test12.json", "answer12.csv", 6)
     makespan = Debug.calc_make_span(processor_list)
     n_cores = len(processor_list)
     schedule = []

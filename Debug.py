@@ -34,7 +34,7 @@ class Task:
         # p_id ict finish_time
         self.pref_p: set[tuple[int, int, int]] = set()
         self.dag_deadline: int = self.dag.deadline
-
+        self.max_ict = None
 
     # from the list of parents, find the max eet for this task
     # and that would be the starting time for this task.
@@ -269,6 +269,20 @@ class Environment:
 
         self.counter = [0, 0, 0, 0]
         self.time_stamp_history: list[int] = [0]
+        
+        self.last_deadline = 0
+        self.max_ict = 0
+        for dag in dag_list:
+            self.last_deadline = max(self.last_deadline, dag.arrival_time + dag.deadline)
+            for task in dag.task_list:
+                for (child, ict) in task.children:
+                    self.max_ict = max(self.max_ict, ict)
+        
+        for dag in dag_list:
+            for task in dag.task_list:
+                task.max_ict = self.max_ict
+        
+
 
     def check_for_arriving_dags(self) -> None:
         while len(self.dag_arrival) != 0 and self.dag_arrival[0].arrival_time <= self.time_stamp:
@@ -407,7 +421,10 @@ def sdf_scheduler(processor_list: list[Processor], upcomming_tasks: list[Task], 
 
 def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[Task], time):
     has_scheduled = False
-    upcomming_tasks.sort(key=lambda task: heuristic(task, time), reverse=True)
+    idle_processors = list(filter(lambda proc: proc.is_idle, processor_list))
+    if len(idle_processors) == 0:
+        return has_scheduled
+    upcomming_tasks.sort(key=lambda task: heuristic(task, time, idle_processors), reverse=True)
     # print([t.task.name for t in upcomming_tasks])
     # print("Is p idle?", [p.is_idle for p in processor_list])
 
@@ -432,60 +449,50 @@ def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[T
 
         non_prioriticed_processors = set(range(len(processor_list))).difference(cache_priority).difference(ict_priority)
 
-        for p_id in cache_priority.intersection(ict_priority):
-            success = processor_list[p_id].start(upcomming_task, time)
-            has_scheduled = has_scheduled or success
-            if success:
-                pop_task_from_list(upcomming_task, upcomming_tasks, time, p_id)
-                break
-        if success:
-            continue
-        for p_id in cache_priority.difference(ict_priority):
-            success = processor_list[p_id].start(upcomming_task, time)
-            has_scheduled = has_scheduled or success
-            if success:
-                pop_task_from_list(upcomming_task, upcomming_tasks, time, p_id)
-                break
-        if success:
-            continue
-        for p_id in ict_priority.difference(cache_priority):
-            success = processor_list[p_id].start(upcomming_task, time)
-            has_scheduled = has_scheduled or success
-            if success:
-                pop_task_from_list(upcomming_task, upcomming_tasks, time, p_id)
-                break
-        if success:
-            continue
-        for p_id in non_prioriticed_processors:
-            success = processor_list[p_id].start(upcomming_task, time)
-            has_scheduled = has_scheduled or success
-            if success:
-                pop_task_from_list(upcomming_task, upcomming_tasks, time, p_id)
-                break
+        # First search available cache hits processors if the dag is shallow and high frequent
+        # First search available ict hit processors otherwise
+
+        if try_schedule_on(cache_priority.intersection(ict_priority), upcomming_task, time, upcomming_tasks, processor_list):
+            has_scheduled = True
+        elif try_schedule_on(cache_priority.difference(ict_priority), upcomming_task, time, upcomming_tasks, processor_list):
+            has_scheduled = True
+        elif try_schedule_on(ict_priority.difference(cache_priority), upcomming_task, time, upcomming_tasks, processor_list):
+            has_scheduled = True
+        elif try_schedule_on(non_prioriticed_processors, upcomming_task, time, upcomming_tasks, processor_list):
+            has_scheduled = True
+
     return has_scheduled
 
+def try_schedule_on(processor_set:set[Processor], upcomming_task:Task, time:int, upcomming_tasks:list[Task], processor_list:list[Processor]):
+    success = False
+    for p_id in processor_set:
+        success = processor_list[p_id].start(upcomming_task, time)
+        if success:
+            pop_task_from_list(upcomming_task, upcomming_tasks, time, p_id)
+            break
+    return success
 
-def heuristic(task: Task, time: int):
+def heuristic(task: Task, time: int, processor_list:list[Processor]):
     # Time until deadline
     h0 = -(task.dag.arrival_time + task.dag.deadline - time)
     # Max posible communication penalty (ict)
     h1 = 0
     for p_id, ict, ft in task.pref_p:
         h1 = max(h1, ft + ict - time)
+    #h1 /= task.max_ict
     # execution time left of the dags longest path from todo.task 
-    # h2 = todo.task.norm_effective_depth  # normalized with the deadline of dag
+    # h2 = task.norm_effective_depth  # normalized with the deadline of dag
     h2 = task.effective_depth
     # h3 = todo.task.norm_effective_depth  # normalized with the deadline of dag
     
     # h3 = 1/(1-min(abs(h0)/h2, 0.999999999))
-    # h3 = 0
-    # for proc in processor_list:
-    #     h3 += int(todo.task._type in [cached_task._type for cached_task in proc.cache])
-    # if h3 > 0:
-    #     h3 = len(processor_list) - h3
-
-    h = h0 + 0.1*h1 + h2
-    # print(todo.task.name, h)
+    h3 = 0
+    for proc in processor_list:
+        h3 += int(task._type in [cached_task._type for cached_task in proc.cache])
+    if h3 > 0:
+        h3 = len(processor_list) - h3
+    # h3 /= len(processor_list)
+    h = h0 + 0.1*h1 + 1.5 * h2 
     return h
     # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
 
@@ -610,7 +617,7 @@ def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_tim
 
 def main(input_filename: str, output_filename: str, n_processors: int = 8):
     dag_list: list[DAG] = load_from_json(input_filename)
-    print(len(dag_list))
+
 
     # something that keeps track of what we've done
     # initialze a empty schedule, the history
@@ -620,6 +627,8 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
     processor_list = [Processor(i) for i in range(n_processors)]
 
     env = Environment(dag_list, processor_list)
+    print("Final Deadline:", env.last_deadline)
+    print("Largest ICT", env.max_ict)
     try:
         start_time = time.time_ns()
         # Only works when the dags isn't repopulated
@@ -665,10 +674,11 @@ if __name__ == '__main__':
     print(pn_std)
     print(utility)
     quit()"""
-
     testcases = [f"test{i}.json" for i in range(1, 13)]
 
+
     for i, test in enumerate(testcases):
+        #if i != 11: continue
         print("-"*20)
         processor_list, dag_list, _ = main("testcases/"+test,
                                            f"answer{i+1}.csv",
