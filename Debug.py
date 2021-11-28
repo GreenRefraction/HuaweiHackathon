@@ -157,6 +157,9 @@ class Processor:
 
     def finish(self):
         """Finish the task that is currently running"""
+        # add to answers
+        self.answers.add(self.current_running_task)
+        
         # append to the cache
         self.cache.append(self.current_running_task)
         if len(self.cache) > self.cache_size:
@@ -187,13 +190,13 @@ class Processor:
         ict_list: list[int] = []
         pay_the_fee: bool = False
         for (parent, ict) in todo.task.parents:
-            ict_list.append(ict)
-            if parent not in self.answers:
+            if parent not in self.answers: # cleaning might speed up things, it will sure as hell save memory
                 # now we need to pay the ict fee
                 pay_the_fee = True
-            else:
+                ict_list.append(ict)
+            # else:
                 # remove the parent from the answers set
-                self.answers.remove(parent)
+                # self.answers.remove(parent)  Not desired because one task can have several childs on the same CPU
         # the else statement will only trigger if the task is an entry task
         # i.e it has not parent, which means we dont pay the fee
         ict = max(ict_list) if len(ict_list) != 0 else 0
@@ -242,10 +245,12 @@ class Environment:
         self.processor_list: list[Processor] = processor_list
 
         self.counter = [0, 0, 0, 0]
+        self.time_stamp_history:list[int] = [0]
 
     def step(self, has_scheduled):
         dt = self.calc_next_time_step(has_scheduled)
         self.time_stamp += dt
+        self.time_stamp_history.append(self.time_stamp)
 
         for processor in self.processor_list:
             processor.step(self.time_stamp)
@@ -349,7 +354,48 @@ def load_from_json(file_name) -> list[DAG]:
         return dags
 
 
-def scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t) -> None:
+# - We if we have finished a task, we want to prioritize its children with the largest ict
+# - We want to utilize caching for tasks with large EET, i.e, same type of tasks should be scheduled on the same core within 4 scheduled tasks
+
+def sdf_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t):
+    has_scheduled = False
+    upcomming_tasks.sort(key=lambda todo: todo.task.dag.arrival_time + todo.task.dag.deadline)
+    # upcomming_tasks.sort(key=heuristic(todo))
+    
+    # Start any task that is available
+    for p_id, processor in enumerate(processor_list):
+        # try to schedule the first task
+        for todo in upcomming_tasks:
+            success = processor.start(todo, t)
+            if success:
+                has_scheduled = success
+                # print(t, p_id, to_sched.task.name)
+                pop_task_from_list(todo, upcomming_tasks, t, p_id)
+                break
+    return has_scheduled
+
+def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t):
+    has_scheduled = False
+    upcomming_tasks.sort(key=heuristic)
+    
+    # Start any task that is available
+    for p_id, processor in enumerate(processor_list):
+        # try to schedule the first task
+        for todo in upcomming_tasks:
+            success = processor.start(todo, t)
+            if success:
+                has_scheduled = success
+                # print(t, p_id, to_sched.task.name)
+                pop_task_from_list(todo, upcomming_tasks, t, p_id)
+                break
+    return has_scheduled
+
+def heuristic(todo:TODO):
+    
+    return todo.task.dag.arrival_time + todo.task.dag.deadline
+    # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
+
+def sdf_p_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t) -> None:
     has_scheduled = False
     upcomming_tasks.sort(
         key=lambda todo: todo.task.dag.arrival_time + todo.task.dag.deadline)
@@ -392,11 +438,6 @@ def rbfs_scheduler(processor_list:list[Processor], upcomming_tasks:list[TODO], t
     # once we've taken that action the Q function would have to be reevaluated
     # 
     
-    pass
-
-def heuristic(processor:Processor, todo:TODO):
-    # Evaluate the action of taking the task todo and scheduling it to this processor
-
     pass
 
 def pop_task_from_list(task_to_remove: TODO, upcomming_tasks: list[TODO], t: int, p_id: int):
@@ -499,7 +540,7 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
         # Only works when the dags isn't repopulated
         while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:
 
-            env.step(scheduler(processor_list,
+            env.step(sdf_scheduler(processor_list,
                                env.upcomming_tasks,
                                env.time_stamp))
         stop_time = time.time_ns()
@@ -512,7 +553,7 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
         # Here we failed the scheduling task
         pass
 
-    return processor_list, dag_list
+    return processor_list, dag_list, env
 
 
 if __name__ == '__main__':
@@ -543,7 +584,7 @@ if __name__ == '__main__':
     testcases = [f"test{i}.json" for i in range(1, 13)]
 
     for i, test in enumerate(testcases):
-        processor_list, dag_list = main("testcases/"+test,
+        processor_list, dag_list, _ = main("testcases/"+test,
                                         f"answer{i+1}.csv",
                                         n_processors=8 if i < 6 else 6)
         make_span = calc_make_span(processor_list)

@@ -30,7 +30,7 @@ def load_csv(filename):
 if __name__ == '__main__':
     filename = "output_sample.csv"
 
-    processor_list, dag_list = Debug.main()
+    processor_list, dag_list, env = Debug.main("testcases/test5.json","answer5.csv", 8)
     makespan = Debug.calc_make_span(processor_list)
     n_cores = len(processor_list)
     schedule = []
@@ -90,12 +90,15 @@ if __name__ == '__main__':
             gnt.broken_barh([(task_start_time, eet)], (p_id*dy, dy-1), facecolor=ec, edgecolor=fc, linewidth=1)
             x_c = task_start_time + eet/4
             y_c = p_id*dy + dy/2
-            #gnt.text(x_c, y_c, str(task_id))
+            gnt.text(x_c, y_c, str(task_id))
     
     for i, dag in enumerate(dag_list):
         deadline_line_color = id_color_map(i) 
         if dag._failed: deadline_line_color = 'black'
         t = dag.arrival_time + dag.deadline
         plt.plot([t,t], [-10, ymax+10], color=deadline_line_color, linewidth=2)
+    
+    for time_stamp in env.time_stamp_history:
+        plt.plot([time_stamp, time_stamp], [-20, ymax+20], color='black', linestyle='dashed', alpha=0.5)
     plt.show()
     
