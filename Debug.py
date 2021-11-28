@@ -399,43 +399,61 @@ def sdf_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], 
 
 def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], time):
     has_scheduled = False
-    upcomming_tasks.sort(key=lambda td: heuristic(td, time), reverse=True)
+    upcomming_tasks.sort(key=lambda td: heuristic(td, time, processor_list), reverse=True)
     # print([t.task.name for t in upcomming_tasks])
     # print("Is p idle?", [p.is_idle for p in processor_list])
 
     for todo in upcomming_tasks.copy():
+        if True not in [p.is_idle for p in processor_list]:
+            return has_scheduled
         # print("trying task", todo.task.name)
         success = False
-        p_priority = sorted(list(todo.pref_p), 
+        p_priority = sorted(list(todo.pref_p),
                             key=lambda t: t[2] + t[1] - time,
                             reverse=True)
-        # if todo.task.name == "Task5023":
-        #     print("priority of 5023", p_priority)
-        # print(todo.task.name, p_priority)
-        for p_id, _, _ in p_priority:
+        ict_priority = set([p_id for p_id, _, _ in p_priority])
+
+        cache_priority = set()
+        for p_id, proc in enumerate(processor_list):
+            if todo.task._type in [cached_task._type for cached_task in proc.cache]:
+                cache_priority.add(p_id)
+
+        non_prioriticed_processors = set(range(len(processor_list))).difference(cache_priority).difference(ict_priority)
+
+        for p_id in cache_priority.intersection(ict_priority):
             success = processor_list[p_id].start(todo, time)
-            # if todo.task.name == "Task5023":
-            #     print("tried to sched 5023 with prio on", p_id, "result", success)
             has_scheduled = has_scheduled or success
             if success:
-                # print(t, p_id, to_sched.task.name)
                 pop_task_from_list(todo, upcomming_tasks, time, p_id)
                 break
         if success:
             continue
-        for p_id in set(range(len(processor_list))).difference([p_id for p_id, _, _ in todo.pref_p]):
+        for p_id in cache_priority.difference(ict_priority):
             success = processor_list[p_id].start(todo, time)
             has_scheduled = has_scheduled or success
-            # if todo.task.name == "Task5023":
-            #     print("tried to sched 5023 on", p_id, "result", success)
             if success:
-                # print(t, p_id, to_sched.task.name)
+                pop_task_from_list(todo, upcomming_tasks, time, p_id)
+                break
+        if success:
+            continue
+        for p_id in ict_priority.difference(cache_priority):
+            success = processor_list[p_id].start(todo, time)
+            has_scheduled = has_scheduled or success
+            if success:
+                pop_task_from_list(todo, upcomming_tasks, time, p_id)
+                break
+        if success:
+            continue
+        for p_id in non_prioriticed_processors:
+            success = processor_list[p_id].start(todo, time)
+            has_scheduled = has_scheduled or success
+            if success:
                 pop_task_from_list(todo, upcomming_tasks, time, p_id)
                 break
     return has_scheduled
 
 
-def heuristic(todo: TODO, time: int):
+def heuristic(todo: TODO, time: int, processor_list: list[Processor]):
     # Time until deadline
     h0 = -(todo.task.dag.arrival_time + todo.task.dag.deadline - time)
     # Max posible communication penalty (ict)
@@ -445,8 +463,16 @@ def heuristic(todo: TODO, time: int):
     # execution time left of the dags longest path from todo.task 
     # h2 = todo.task.norm_effective_depth  # normalized with the deadline of dag
     h2 = todo.task.effective_depth
+    # h3 = todo.task.norm_effective_depth  # normalized with the deadline of dag
+    
+    # h3 = 1/(1-min(abs(h0)/h2, 0.999999999))
+    # h3 = 0
+    # for proc in processor_list:
+    #     h3 += int(todo.task._type in [cached_task._type for cached_task in proc.cache])
+    # if h3 > 0:
+    #     h3 = len(processor_list) - h3
 
-    h = 10*h0 + h1 + 10*h2
+    h = h0 + 0.1*h1 + h2
     # print(todo.task.name, h)
     return h
     # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
