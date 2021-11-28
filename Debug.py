@@ -101,7 +101,7 @@ class DAG:
     def tick(self) -> None:
         """set is_complete to True if all of the tasks in this dag are complete"""
         for task in self.exit_tasks:
-            if task.is_complete == False:
+            if not task.is_complete:
                 return
         self.is_complete = True
 
@@ -159,7 +159,7 @@ class Processor:
         """Finish the task that is currently running"""
         # add to answers
         self.answers.add(self.current_running_task)
-        
+
         # append to the cache
         self.cache.append(self.current_running_task)
         if len(self.cache) > self.cache_size:
@@ -184,13 +184,13 @@ class Processor:
         if todo.min_start_time > t:
             return False
         for (parent, ict) in todo.task.parents:
-            if parent.is_complete != True:
+            if not parent.is_complete:
                 return False
         # First check the communication time
         ict_list: list[int] = []
         pay_the_fee: bool = False
         for (parent, ict) in todo.task.parents:
-            if parent not in self.answers: # cleaning might speed up things, it will sure as hell save memory
+            if parent not in self.answers:  # cleaning might speed up things, it will sure as hell save memory
                 # now we need to pay the ict fee
                 pay_the_fee = True
                 ict_list.append(ict)
@@ -208,7 +208,7 @@ class Processor:
         eet = todo.task.EET
         if todo.task._type in [cached_task._type for cached_task in self.cache]:
             eet = int(eet * 0.9)  # CHECK? rounding error?
-            #print(t, "new instance", eet, todo.task.dag_id)
+            # print(t, "new instance", eet, todo.task.dag_id)
 
         self.finish_time_of_running_task = t + eet
         if pay_the_fee:
@@ -237,7 +237,7 @@ class Environment:
         self.upcomming_tasks: list[Task] = []
         self.time_stamp: int = 0
         while len(self.dag_arrival) != 0 and self.dag_arrival[0].arrival_time <= self.time_stamp:
-            #print(self.dag_arrival[0].arrival_time, self.time_stamp)
+            # print(self.dag_arrival[0].arrival_time, self.time_stamp)
             self.upcomming_tasks.extend(
                 [TODO(t, self.time_stamp, None) for t in self.dag_arrival[0].entry_tasks])
             self.dag_arrival.pop(0)
@@ -245,7 +245,7 @@ class Environment:
         self.processor_list: list[Processor] = processor_list
 
         self.counter = [0, 0, 0, 0]
-        self.time_stamp_history:list[int] = [0]
+        self.time_stamp_history: list[int] = [0]
 
     def step(self, has_scheduled):
         dt = self.calc_next_time_step(has_scheduled)
@@ -257,7 +257,7 @@ class Environment:
 
         # keep the upcomming_tasks list up to date
         while len(self.dag_arrival) != 0 and self.dag_arrival[0].arrival_time <= self.time_stamp:
-            #print(self.dag_arrival[0].arrival_time, self.time_stamp)
+            # print(self.dag_arrival[0].arrival_time, self.time_stamp)
             self.upcomming_tasks.extend(
                 [TODO(t, self.time_stamp, None) for t in self.dag_arrival[0].entry_tasks])
             dag_to_process = self.dag_arrival.pop(0)
@@ -335,7 +335,7 @@ class Environment:
         else:
 
             # by default we take 1 timestep
-            #print(len(self.upcomming_tasks), self.time_stamp)
+            # print(len(self.upcomming_tasks), self.time_stamp)
             print("If we shouldn't arive here")
             self.counter[3] += 1
             return 1
@@ -359,9 +359,10 @@ def load_from_json(file_name) -> list[DAG]:
 
 def sdf_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t):
     has_scheduled = False
-    upcomming_tasks.sort(key=lambda todo: todo.task.dag.arrival_time + todo.task.dag.deadline)
+    upcomming_tasks.sort(
+        key=lambda todo: todo.task.dag.arrival_time + todo.task.dag.deadline)
     # upcomming_tasks.sort(key=heuristic(todo))
-    
+
     # Start any task that is available
     for p_id, processor in enumerate(processor_list):
         # try to schedule the first task
@@ -373,11 +374,12 @@ def sdf_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], 
                 pop_task_from_list(todo, upcomming_tasks, t, p_id)
                 break
     return has_scheduled
+
 
 def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t):
     has_scheduled = False
     upcomming_tasks.sort(key=heuristic)
-    
+
     # Start any task that is available
     for p_id, processor in enumerate(processor_list):
         # try to schedule the first task
@@ -390,10 +392,12 @@ def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[T
                 break
     return has_scheduled
 
-def heuristic(todo:TODO):
-    
+
+def heuristic(todo: TODO):
+
     return todo.task.dag.arrival_time + todo.task.dag.deadline
     # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
+
 
 def sdf_p_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t) -> None:
     has_scheduled = False
@@ -421,24 +425,26 @@ def sdf_p_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO]
                 break
     return has_scheduled
 
-def rbfs_scheduler(processor_list:list[Processor], upcomming_tasks:list[TODO], t, real_start_time):
+
+def rbfs_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t, real_start_time):
     # the goal here is to use a heuristic to evaluate each action that the scheduler is taking
     # maybe combine this with a bfs search, but idk if this is thesible
 
     # initialize a matrix (n_processors, n_tasks) of heuristic values Q
-    # 
+    #
     # foreach processor:
-        # if processor is not idle:
-            # Q[processor, a] = -infinity
-            # continue
-        # foreach task:
-            # Q[processor, task] = heuristic(processor, todo)
-    # then the optimal action according to Q would be 
+    # if processor is not idle:
+    # Q[processor, a] = -infinity
+    # continue
+    # foreach task:
+    # Q[processor, task] = heuristic(processor, todo)
+    # then the optimal action according to Q would be
     # (processor, todo) = argmax(Q)
     # once we've taken that action the Q function would have to be reevaluated
-    # 
-    
+    #
+
     pass
+
 
 def pop_task_from_list(task_to_remove: TODO, upcomming_tasks: list[TODO], t: int, p_id: int):
     # before we delete the task[idx] we want to append the children of that task to the upcomming tasks list
@@ -541,8 +547,8 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
         while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:
 
             env.step(sdf_scheduler(processor_list,
-                               env.upcomming_tasks,
-                               env.time_stamp))
+                                   env.upcomming_tasks,
+                                   env.time_stamp))
         stop_time = time.time_ns()
         # CHECK? rounding error?
         exec_time_scheduler = (stop_time - start_time)//1e6
@@ -572,7 +578,7 @@ if __name__ == '__main__':
     processor_list[2].utilization_time = 30+27
 
     make_span = calc_make_span(processor_list)
-    
+
     worst_case_makespan = worst_case(dag_list)
     pn_std = calc_std_deviation(processor_list, make_span)
     utility = utility_func(make_span, worst_case_makespan, pn_std)
@@ -580,15 +586,13 @@ if __name__ == '__main__':
     print(utility)
     quit()"""
 
-
     testcases = [f"test{i}.json" for i in range(1, 13)]
 
     for i, test in enumerate(testcases):
         processor_list, dag_list, _ = main("testcases/"+test,
-                                        f"answer{i+1}.csv",
-                                        n_processors=8 if i < 6 else 6)
+                                           f"answer{i+1}.csv",
+                                           n_processors=8 if i < 6 else 6)
         make_span = calc_make_span(processor_list)
         print(f"Case {i+1}")
-        #print([processor.utilization_time/make_span for processor in processor_list])
-        #print()
-
+        # print([processor.utilization_time/make_span for processor in processor_list])
+        # print()
