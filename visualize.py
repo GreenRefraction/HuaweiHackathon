@@ -87,26 +87,38 @@ if __name__ == '__main__':
         for task_index, (task_id, task_start_time, task_finish_time) in enumerate(processor_execution_history):
             eet = task_finish_time - task_start_time
             dag = dag_list[index_to_norm_id[p_id][task_index]]
-            fc = id_color_map(index_to_norm_id[p_id][task_index])
+            ec = id_color_map(index_to_norm_id[p_id][task_index])
             if dag._failed:
-                fc = 'black'
-            ec = type_color_map(index_to_norm_type[p_id][task_index])
+                ec = 'black'
+            fc = type_color_map(index_to_norm_type[p_id][task_index])
 
             gnt.broken_barh([(task_start_time, eet)], (p_id*dy, dy-1),
-                            facecolor=ec, edgecolor=fc, linewidth=1)
+                            facecolor=fc, edgecolor=ec, linewidth=1)
             x_c = task_start_time + eet/4
             y_c = p_id*dy + dy/2
             gnt.text(x_c, y_c, str(task_id))
 
     for i, dag in enumerate(dag_list):
-        deadline_line_color = id_color_map(i)
+        # deadline_line_color = id_color_map(i)
+        deadline_line_color = type_color_map(dag._type)
         if dag._failed:
-            deadline_line_color = 'black'
+            continue
+        t = dag.arrival_time + dag.deadline
+        plt.plot([t, t], [-10, ymax+10],
+                 color=deadline_line_color, linewidth=2, alpha=0.3)
+
+    for i, dag in enumerate(dag_list):
+        deadline_line_color = 'black'
+        if not dag._failed:
+            continue
         t = dag.arrival_time + dag.deadline
         plt.plot([t, t], [-10, ymax+10],
                  color=deadline_line_color, linewidth=2)
+        plt.plot([dag.arrival_time, dag.arrival_time], [-10, ymax+10],
+                 color=deadline_line_color, linewidth=2)
 
     for time_stamp in env.time_stamp_history:
+        continue
         plt.plot([time_stamp, time_stamp], [-20, ymax+20],
                  color='black', linestyle='dashed', alpha=0.5)
     plt.show()

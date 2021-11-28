@@ -193,9 +193,14 @@ class Processor:
             return False
         # check if the parents of the task is finished
 
+        # if todo.task.name == "Task5023":
+        #     print("min start time 5023", todo.min_start_time)
+
         if todo.min_start_time > t:
             return False
         for (parent, ict) in todo.task.parents:
+            # if todo.task.name == "Task5023":
+            #     print(f"parrent {parent.name} to 5023 done:", parent.is_complete)
             if not parent.is_complete:
                 return False
         # First check the communication time
@@ -396,15 +401,21 @@ def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[T
     has_scheduled = False
     upcomming_tasks.sort(key=lambda td: heuristic(td, time), reverse=True)
     # print([t.task.name for t in upcomming_tasks])
+    # print("Is p idle?", [p.is_idle for p in processor_list])
 
-    for todo in upcomming_tasks:
+    for todo in upcomming_tasks.copy():
+        # print("trying task", todo.task.name)
         success = False
         p_priority = sorted(list(todo.pref_p), 
                             key=lambda t: t[2] + t[1] - time,
                             reverse=True)
+        # if todo.task.name == "Task5023":
+        #     print("priority of 5023", p_priority)
         # print(todo.task.name, p_priority)
         for p_id, _, _ in p_priority:
             success = processor_list[p_id].start(todo, time)
+            # if todo.task.name == "Task5023":
+            #     print("tried to sched 5023 with prio on", p_id, "result", success)
             has_scheduled = has_scheduled or success
             if success:
                 # print(t, p_id, to_sched.task.name)
@@ -415,6 +426,8 @@ def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[T
         for p_id in set(range(len(processor_list))).difference([p_id for p_id, _, _ in todo.pref_p]):
             success = processor_list[p_id].start(todo, time)
             has_scheduled = has_scheduled or success
+            # if todo.task.name == "Task5023":
+            #     print("tried to sched 5023 on", p_id, "result", success)
             if success:
                 # print(t, p_id, to_sched.task.name)
                 pop_task_from_list(todo, upcomming_tasks, time, p_id)
@@ -433,7 +446,7 @@ def heuristic(todo: TODO, time: int):
     # h2 = todo.task.norm_effective_depth  # normalized with the deadline of dag
     h2 = todo.task.effective_depth
 
-    h = 10*h0 + h1 + 5*h2
+    h = 10*h0 + h1 + 10*h2
     # print(todo.task.name, h)
     return h
     # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
@@ -572,6 +585,7 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
         start_time = time.time_ns()
         # Only works when the dags isn't repopulated
         while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:
+            # print("-"*30)
             # print("Env time stamp", env.time_stamp)
             env.step(heuristic_scheduler(processor_list,
                                      env.upcomming_tasks,
