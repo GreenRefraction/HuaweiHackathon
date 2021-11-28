@@ -404,6 +404,8 @@ def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[T
     # print("Is p idle?", [p.is_idle for p in processor_list])
 
     for todo in upcomming_tasks.copy():
+        if True not in [p.is_idle for p in processor_list]:
+            return has_scheduled
         # print("trying task", todo.task.name)
         success = False
         p_priority = sorted(list(todo.pref_p), 
