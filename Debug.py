@@ -404,6 +404,9 @@ def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[T
     # print("Is p idle?", [p.is_idle for p in processor_list])
 
     for todo in upcomming_tasks.copy():
+        # here we only continue if atleast one processor is available
+        # but maybe extracting only the available processors will make 
+        # the program even faster
         if True not in [p.is_idle for p in processor_list]:
             return has_scheduled
         # print("trying task", todo.task.name)
