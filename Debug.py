@@ -110,14 +110,15 @@ class DAG:
 
 
 class TODO:
-    def __init__(self, task, min_start_time, pref_p_id):
+    def __init__(self, task, min_start_time, pref_p_id_ict_ft):
         self.done = False
         self.task: Task = task
         self.min_start_time: int = min_start_time
         self.finish_time: int = None
-        self.pref_p: set[int] = set()
-        if pref_p_id is not None:
-            self.pref_p.add(pref_p_id)
+        # p_id ict finish_time
+        self.pref_p: set[tuple[int, int, int]] = set()
+        if pref_p_id_ict_ft is not None:
+            self.pref_p.add(pref_p_id_ict_ft)
         self.dag_deadline: int = task.dag.deadline
 
 
@@ -380,26 +381,45 @@ def sdf_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], 
     return has_scheduled
 
 
-def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t):
+def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], time):
     has_scheduled = False
-    upcomming_tasks.sort(key=heuristic)
+    upcomming_tasks.sort(key=lambda td: heuristic(td, time), reverse=True)
+    # print([t.task.name for t in upcomming_tasks])
 
-    # Start any task that is available
-    for p_id, processor in enumerate(processor_list):
-        # try to schedule the first task
-        for todo in upcomming_tasks:
-            success = processor.start(todo, t)
+    for todo in upcomming_tasks:
+        success = False
+        p_priority = sorted(list(todo.pref_p), 
+                            key=lambda t: t[2] + t[1] - time,
+                            reverse=True)
+        # print(todo.task.name, p_priority)
+        for p_id, _, _ in p_priority:
+            success = processor_list[p_id].start(todo, time)
+            has_scheduled = has_scheduled or success
             if success:
-                has_scheduled = success
                 # print(t, p_id, to_sched.task.name)
-                pop_task_from_list(todo, upcomming_tasks, t, p_id)
+                pop_task_from_list(todo, upcomming_tasks, time, p_id)
+                break
+        if success:
+            continue
+        for p_id in set(range(len(processor_list))).difference([p_id for p_id, _, _ in todo.pref_p]):
+            success = processor_list[p_id].start(todo, time)
+            has_scheduled = has_scheduled or success
+            if success:
+                # print(t, p_id, to_sched.task.name)
+                pop_task_from_list(todo, upcomming_tasks, time, p_id)
                 break
     return has_scheduled
 
 
-def heuristic(todo: TODO):
+def heuristic(todo: TODO, time: int):
+    h0 = -(todo.task.dag.arrival_time + todo.task.dag.deadline)
+    h1 = 0
+    for p_id, ict, ft in todo.pref_p:
+        h1 = max(h1, ft + ict - time)
 
-    return todo.task.dag.arrival_time + todo.task.dag.deadline
+    h = 10*h0 + h1
+    # print(todo.task.name, h)
+    return h
     # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
 
 
@@ -411,7 +431,7 @@ def sdf_p_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO]
 
     for todo in upcomming_tasks:
         success = False
-        for p_id in todo.pref_p:
+        for p_id, _, _ in todo.pref_p:
             success = processor_list[p_id].start(todo, t)
             has_scheduled = has_scheduled or success
             if success:
@@ -420,7 +440,7 @@ def sdf_p_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO]
                 break
         if success:
             continue
-        for p_id in set(range(len(processor_list))).difference(todo.pref_p):
+        for p_id in set(range(len(processor_list))).difference([p_id for p_id, _, _ in todo.pref_p]):
             success = processor_list[p_id].start(todo, t)
             has_scheduled = has_scheduled or success
             if success:
@@ -457,11 +477,11 @@ def pop_task_from_list(task_to_remove: TODO, upcomming_tasks: list[TODO], t: int
             if upc_todo.task == child:
                 upc_todo.min_start_time = max(
                     upc_todo.min_start_time, task_to_remove.finish_time)
-                upc_todo.pref_p.add(p_id)
+                upc_todo.pref_p.add((p_id, ict, task_to_remove.finish_time))
                 break
         else:
             upcomming_tasks.append(
-                TODO(child, task_to_remove.finish_time, p_id))
+                TODO(child, task_to_remove.finish_time, (p_id, ict, task_to_remove.finish_time)))
     upcomming_tasks.remove(task_to_remove)
 
 
@@ -536,8 +556,8 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
         start_time = time.time_ns()
         # Only works when the dags isn't repopulated
         while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:
-
-            env.step(sdf_scheduler(processor_list,
+            # print("Env time stamp", env.time_stamp)
+            env.step(heuristic_scheduler(processor_list,
                                      env.upcomming_tasks,
                                      env.time_stamp))
         stop_time = time.time_ns()
