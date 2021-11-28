@@ -2,7 +2,6 @@ import json
 import time
 import csv
 import math
-import numpy as np
 # from DAG import DAG
 # from Processor import Processor, TODO
 # from Environment import Environment
@@ -491,20 +490,6 @@ def utility_func(makespan, worst_case, PN_std):
 
 
 def calc_std_deviation(processor_list: list[Processor], end_time):
-    # N = len(processor_list) - 1
-    # mean = 0
-    # for processor in processor_list:
-    #     pn = processor.utilization_time/end_time
-    #     # print(pn)
-    #     mean += pn/(N + 1)
-    # std = 0
-    # for processor in processor_list:
-    #     pn = processor.utilization_time/end_time
-    #     std += ((pn - mean)**2)/N
-    # return math.sqrt(std)
-    """
-    s² = (sum (xi - x_mean)²)/(n-1)
-    """
     ut = [p.utilization_time for p in processor_list]
     norm_ut = list(map(lambda u: u/end_time, ut))
     mean_ut = sum(norm_ut) / len(norm_ut)
@@ -513,9 +498,6 @@ def calc_std_deviation(processor_list: list[Processor], end_time):
     s /= len(norm_ut)
 
     return math.sqrt(s)
-    # ut = [p.utilization_time for p in processor_list]
-    # norm_ut = list(map(lambda u: u/end_time, ut))
-    # return np.std(norm_ut)
 
 
 def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_time, filename):
