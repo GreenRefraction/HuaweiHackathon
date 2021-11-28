@@ -2,7 +2,6 @@ import json
 import time
 import csv
 import math
-import numpy as np
 # from DAG import DAG
 # from Processor import Processor, TODO
 # from Environment import Environment
@@ -13,27 +12,21 @@ class FailedToScheduleException(Exception):
 
 
 class Task:
-    name = None
-    dag = None
-    EET = None
-    _type = None
-    children = None
-    parents = None
-
-    is_complete: bool = None
-
     def __init__(self, name, dag, json_task_data: dict) -> None:
         self.name = name
         self.EET = json_task_data['EET']
         self._type = json_task_data['Type']
 
         self.children: list[(Task, int)] = list()
-        self.parents: list[(Task, int)] = list()  # Needed?
+        self.parents: list[(Task, int)] = list()
 
         self.is_complete: bool = False
         self.dag = dag
 
         self.finish_time = None
+        self.is_complete: bool = None
+        self.effective_depth: int = None
+        self.norm_effective_depth: int = None
 
     # from the list of parents, find the max eet for this task
     # and that would be the starting time for this task.
@@ -50,13 +43,24 @@ class Task:
     def tick(self):
         self.is_complete = True
 
+    def calc_effective_depth(self):
+        if self.effective_depth is not None:
+            self.effective_depth
+            
+        self.effective_depth = self.EET
+        max_child_depth = 0
+        for (c, _) in self.children:
+            max_child_depth = max(max_child_depth, c.calc_effective_depth())
+
+        self.effective_depth += max_child_depth
+        self.norm_effective_depth = self.effective_depth / self.dag.deadline
+        return self.effective_depth
+
     def __str__(self) -> str:
         return json.dumps(str(self.__dict__), default=lambda o: o.name if type(o) == Task else str(o.__dict__))
 
 
 class DAG:
-    name = None
-
     def __init__(self, name, json_dag_data: dict) -> None:
         self.name = name
 
@@ -96,6 +100,12 @@ class DAG:
                 self.entry_tasks.append(task)
             if not len(task.children) > 0:
                 self.exit_tasks.append(task)
+        
+        # Calculate task depth
+        self.max_depth: int = 0
+        for task in self.entry_tasks:
+            task.calc_effective_depth()
+            self.max_depth = max(task.effective_depth, self.max_depth)
 
         self.task_list = list(name_to_task.values())
 
@@ -111,14 +121,15 @@ class DAG:
 
 
 class TODO:
-    def __init__(self, task, min_start_time, pref_p_id):
+    def __init__(self, task, min_start_time, pref_p_id_ict_ft):
         self.done = False
         self.task: Task = task
         self.min_start_time: int = min_start_time
         self.finish_time: int = None
-        self.pref_p: set[int] = set()
-        if pref_p_id is not None:
-            self.pref_p.add(pref_p_id)
+        # p_id ict finish_time
+        self.pref_p: set[tuple[int, int, int]] = set()
+        if pref_p_id_ict_ft is not None:
+            self.pref_p.add(pref_p_id_ict_ft)
         self.dag_deadline: int = task.dag.deadline
 
 
@@ -182,9 +193,14 @@ class Processor:
             return False
         # check if the parents of the task is finished
 
+        # if todo.task.name == "Task5023":
+        #     print("min start time 5023", todo.min_start_time)
+
         if todo.min_start_time > t:
             return False
         for (parent, ict) in todo.task.parents:
+            # if todo.task.name == "Task5023":
+            #     print(f"parrent {parent.name} to 5023 done:", parent.is_complete)
             if not parent.is_complete:
                 return False
         # First check the communication time
@@ -381,26 +397,58 @@ def sdf_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], 
     return has_scheduled
 
 
-def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t):
+def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], time):
     has_scheduled = False
-    upcomming_tasks.sort(key=heuristic)
+    upcomming_tasks.sort(key=lambda td: heuristic(td, time), reverse=True)
+    # print([t.task.name for t in upcomming_tasks])
+    # print("Is p idle?", [p.is_idle for p in processor_list])
 
-    # Start any task that is available
-    for p_id, processor in enumerate(processor_list):
-        # try to schedule the first task
-        for todo in upcomming_tasks:
-            success = processor.start(todo, t)
+    for todo in upcomming_tasks.copy():
+        # print("trying task", todo.task.name)
+        success = False
+        p_priority = sorted(list(todo.pref_p), 
+                            key=lambda t: t[2] + t[1] - time,
+                            reverse=True)
+        # if todo.task.name == "Task5023":
+        #     print("priority of 5023", p_priority)
+        # print(todo.task.name, p_priority)
+        for p_id, _, _ in p_priority:
+            success = processor_list[p_id].start(todo, time)
+            # if todo.task.name == "Task5023":
+            #     print("tried to sched 5023 with prio on", p_id, "result", success)
+            has_scheduled = has_scheduled or success
             if success:
-                has_scheduled = success
                 # print(t, p_id, to_sched.task.name)
-                pop_task_from_list(todo, upcomming_tasks, t, p_id)
+                pop_task_from_list(todo, upcomming_tasks, time, p_id)
+                break
+        if success:
+            continue
+        for p_id in set(range(len(processor_list))).difference([p_id for p_id, _, _ in todo.pref_p]):
+            success = processor_list[p_id].start(todo, time)
+            has_scheduled = has_scheduled or success
+            # if todo.task.name == "Task5023":
+            #     print("tried to sched 5023 on", p_id, "result", success)
+            if success:
+                # print(t, p_id, to_sched.task.name)
+                pop_task_from_list(todo, upcomming_tasks, time, p_id)
                 break
     return has_scheduled
 
 
-def heuristic(todo: TODO):
+def heuristic(todo: TODO, time: int):
+    # Time until deadline
+    h0 = -(todo.task.dag.arrival_time + todo.task.dag.deadline - time)
+    # Max posible communication penalty (ict)
+    h1 = 0
+    for p_id, ict, ft in todo.pref_p:
+        h1 = max(h1, ft + ict - time)
+    # execution time left of the dags longest path from todo.task 
+    # h2 = todo.task.norm_effective_depth  # normalized with the deadline of dag
+    h2 = todo.task.effective_depth
 
-    return todo.task.dag.arrival_time + todo.task.dag.deadline
+    h = 10*h0 + h1 + 10*h2
+    # print(todo.task.name, h)
+    return h
     # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
 
 
@@ -412,7 +460,7 @@ def sdf_p_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO]
 
     for todo in upcomming_tasks:
         success = False
-        for p_id in todo.pref_p:
+        for p_id, _, _ in todo.pref_p:
             success = processor_list[p_id].start(todo, t)
             has_scheduled = has_scheduled or success
             if success:
@@ -421,7 +469,7 @@ def sdf_p_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO]
                 break
         if success:
             continue
-        for p_id in set(range(len(processor_list))).difference(todo.pref_p):
+        for p_id in set(range(len(processor_list))).difference([p_id for p_id, _, _ in todo.pref_p]):
             success = processor_list[p_id].start(todo, t)
             has_scheduled = has_scheduled or success
             if success:
@@ -458,11 +506,11 @@ def pop_task_from_list(task_to_remove: TODO, upcomming_tasks: list[TODO], t: int
             if upc_todo.task == child:
                 upc_todo.min_start_time = max(
                     upc_todo.min_start_time, task_to_remove.finish_time)
-                upc_todo.pref_p.add(p_id)
+                upc_todo.pref_p.add((p_id, ict, task_to_remove.finish_time))
                 break
         else:
             upcomming_tasks.append(
-                TODO(child, task_to_remove.finish_time, p_id))
+                TODO(child, task_to_remove.finish_time, (p_id, ict, task_to_remove.finish_time)))
     upcomming_tasks.remove(task_to_remove)
 
 
@@ -491,20 +539,6 @@ def utility_func(makespan, worst_case, PN_std):
 
 
 def calc_std_deviation(processor_list: list[Processor], end_time):
-    # N = len(processor_list) - 1
-    # mean = 0
-    # for processor in processor_list:
-    #     pn = processor.utilization_time/end_time
-    #     # print(pn)
-    #     mean += pn/(N + 1)
-    # std = 0
-    # for processor in processor_list:
-    #     pn = processor.utilization_time/end_time
-    #     std += ((pn - mean)**2)/N
-    # return math.sqrt(std)
-    """
-    s² = (sum (xi - x_mean)²)/(n-1)
-    """
     ut = [p.utilization_time for p in processor_list]
     norm_ut = list(map(lambda u: u/end_time, ut))
     mean_ut = sum(norm_ut) / len(norm_ut)
@@ -513,9 +547,6 @@ def calc_std_deviation(processor_list: list[Processor], end_time):
     s /= len(norm_ut)
 
     return math.sqrt(s)
-    # ut = [p.utilization_time for p in processor_list]
-    # norm_ut = list(map(lambda u: u/end_time, ut))
-    # return np.std(norm_ut)
 
 
 def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_time, filename):
@@ -554,8 +585,9 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
         start_time = time.time_ns()
         # Only works when the dags isn't repopulated
         while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:
-
-            env.step(sdf_scheduler(processor_list,
+            # print("-"*30)
+            # print("Env time stamp", env.time_stamp)
+            env.step(heuristic_scheduler(processor_list,
                                      env.upcomming_tasks,
                                      env.time_stamp))
         stop_time = time.time_ns()
@@ -598,6 +630,7 @@ if __name__ == '__main__':
     testcases = [f"test{i}.json" for i in range(1, 13)]
 
     for i, test in enumerate(testcases):
+        print("-"*20)
         processor_list, dag_list, _ = main("testcases/"+test,
                                            f"answer{i+1}.csv",
                                            n_processors=8 if i < 6 else 6)
