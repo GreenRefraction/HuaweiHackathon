@@ -598,6 +598,7 @@ if __name__ == '__main__':
     testcases = [f"test{i}.json" for i in range(1, 13)]
 
     for i, test in enumerate(testcases):
+        print("-"*20)
         processor_list, dag_list, _ = main("testcases/"+test,
                                            f"answer{i+1}.csv",
                                            n_processors=8 if i < 6 else 6)
