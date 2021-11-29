@@ -627,19 +627,19 @@ class WaitForNewIncommingDAGAction(Action):
         return f"Wait until {self.soonest_arrival_time}"
 
 class State:
+    # The state contains information about the current state at time t
+    # it tells you which processors are running what task and which 
+    # tasks are in the buffer. Assume that the constructor is only called once
+    # and its for the root node. otherwise when creating children we utilize deepcopy
     def __init__(self, dag_list:list[DAG], processor_list:list[Processor], time_stamp) -> None:
-        # The state contains information about the current state at time t
-        # it tells you which processors are running what task and which 
-        # tasks are in the buffer. Assume that this constructor is only called once
-        # and its for the root node. otherwise when creating children we utilize deepcopy
-
         # A mapping of action to state along with a value of each action
         self.children: dict[Action, State] = None
         self.action_value: dict[Action, float] = dict()
+        self.parent: State = None
         
         # The time
         self.time_stamp = time_stamp
-        # A list of buffering Dags
+        # A list of buffering DAGs
         self.processing_dags: list[DAG] = list()
         self.dag_list_sorted = sorted(dag_list, key=lambda dag: dag.arrival_time)
         self.incomming_dags: list[DAG] = sorted(dag_list, key=lambda dag: dag.arrival_time)
@@ -710,14 +710,6 @@ class State:
                 self.buffering_tasks.append(arriving_task)
             dag_to_process = self.incomming_dags.pop(0)
             self.processing_dags.append(dag_to_process)
-    
-    def copy(self):
-        new_state = State(self.dag_list_sorted, deepcopy(processor_list), self.time_stamp)
-        new_state.buffering_tasks = copy(self.buffering_tasks)
-        for id, processor in enumerate(new_state.processors):
-            processor.current_running_task = self.processors[id].current_running_task
-            processor.answers = self.processors[id].answers.copy()
-        return new_state
 
     def calc_new_child(self, action:Action):
         # Return a new child from self by taking the Action; action
@@ -726,20 +718,18 @@ class State:
             new_state = self.copy()
             new_state.available_actions = None
             new_state.children = None
+            new_state.parent = self
             new_state.time_stamp += action.dt
             for processor in new_state.processors:
                 processor.step(new_state.time_stamp)
-            
-            
         elif type(action) == ScheduleTaskAction:
             action:ScheduleTaskAction = action
-            new_state = self.copy()
-            new_state.available_actions = None
-            new_state.children = None
-            new_state.check_for_arriving_dags()
+            new_state = State(self.dag_list_sorted, deepcopy(self.processors), self.time_stamp)
+            #new_state.check_for_arriving_dags()
             success = new_state.processors[action.processor_id].start(action.task, new_state.time_stamp)
-            pop_task_from_list(action.task, new_state.buffering_tasks, new_state.time_stamp, action.processor_id)
-            
+            #new_state.explore_available_actions()
+            if success:
+                pop_task_from_list(action.task, new_state.buffering_tasks, new_state.time_stamp, action.processor_id)
         else:
             # Default, dunno what to do here
             raise Exception("ABORT")
@@ -878,7 +868,6 @@ if __name__ == '__main__':
     for action in child0.available_actions:
         print(action)
     
-
     action00 = child0.available_actions[0]
     print(action00)
     print('-'*40)
