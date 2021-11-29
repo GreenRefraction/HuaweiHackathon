@@ -516,11 +516,12 @@ def heuristic(task: Task, time: int, processor_list:list[Processor]):
     time_save = int(0.1*task.EET)
     for proc in processor_list:
         cache_hits += int(task._type in [cached_task._type for cached_task in proc.cache])
-    # now multiply time_save with the complement of cache_hits
-    # giving high priority if there are only few cache hits
-    h3 = time_save # * (len(processor_list) - cache_hits)
-
-    h = h0 + h1 + h2 + 0.5*h3
+    h3 = 0
+    if task.child_depth < 4:
+        # now multiply time_save with the complement of cache_hits
+        # giving high priority if there are only few cache hits
+        h3 = time_save * (len(processor_list) - cache_hits)
+    h = h0 + h1 + h2 + h3
     return h
     # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
 
@@ -550,26 +551,6 @@ def sdf_p_scheduler(processor_list: list[Processor], upcomming_tasks: list[Task]
                 pop_task_from_list(todo, upcomming_tasks, t, p_id)
                 break
     return has_scheduled
-
-
-def rbfs_scheduler(processor_list: list[Processor], upcomming_tasks: list[Task], t, real_start_time):
-    # the goal here is to use a heuristic to evaluate each action that the scheduler is taking
-    # maybe combine this with a bfs search, but idk if this is thesible
-
-    # initialize a matrix (n_processors, n_tasks) of heuristic values Q
-    #
-    # foreach processor:
-    # if processor is not idle:
-    # Q[processor, a] = -infinity
-    # continue
-    # foreach task:
-    # Q[processor, task] = heuristic(processor, todo)
-    # then the optimal action according to Q would be
-    # (processor, todo) = argmax(Q)
-    # once we've taken that action the Q function would have to be reevaluated
-    #
-
-    pass
 
 
 def pop_task_from_list(task_to_remove: Task, upcomming_tasks: list[Task], t: int, p_id: int):
