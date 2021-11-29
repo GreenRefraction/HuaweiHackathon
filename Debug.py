@@ -896,28 +896,7 @@ if __name__ == '__main__':
     quit()
     terminal_state = dfs_search(root_state)
 
-    quit()
-    """dag_list = load_from_json("sample.json")
-    execution_history0 = [(0, 0, 10),(3, 43, 53),(1000, 60, 69),(1003, 99, 108)]
-    execution_history1 = [(1, 11, 31), (1001, 70, 88)]
-    execution_history2 = [(2, 12, 42), (1002, 71, 98)]
-
-    processor_list = [Processor(i) for i in range(3)]
-    processor_list[0].execution_history = execution_history0
-    processor_list[0].utilization_time = 10+10+9+9
-    processor_list[1].execution_history = execution_history1
-    processor_list[1].utilization_time = 20+18
-    processor_list[2].execution_history = execution_history2
-    processor_list[2].utilization_time = 30+27
-
-    make_span = calc_make_span(processor_list)
-
-    worst_case_makespan = worst_case(dag_list)
-    pn_std = calc_std_deviation(processor_list, make_span)
-    utility = utility_func(make_span, worst_case_makespan, pn_std)
-    print(pn_std)
-    print(utility)
-    quit()"""
+   
     testcases = [f"test{i}.json" for i in range(1, 13)]
 
 
