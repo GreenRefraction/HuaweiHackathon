@@ -130,13 +130,14 @@ class DAG:
                 self.exit_tasks.append(task)
         
         # Calculate task depth and child depth
-        self.max_depth: int = 0
+        self.EET_depth: int = 0
+        self.child_depth: int = 0
         for task in self.entry_tasks:
             task.n_children = len(task.children)
             task.calc_effective_depth()
             task.calc_child_depth()
-            self.max_depth = max(task.EET_depth, self.max_depth)
-
+            self.EET_depth = max(task.EET_depth, self.EET_depth)
+            self.child_depth = max(task.child_depth, self.child_depth)
         self.task_list = list(name_to_task.values())
 
     def tick(self) -> None:
@@ -149,19 +150,7 @@ class DAG:
     def __str__(self) -> str:
         return json.dumps(self.__dict__, default=lambda o: str(o) if type(o) == Task else o.__dict__, indent=4)
 
-"""
-class TODO:
-    def __init__(self, task, min_start_time, pref_p_id_ict_ft):
-        self.task: Task = task
-        self.min_start_time: int = min_start_time
-        self.finish_time: int = None
-        # p_id ict finish_time
-        self.pref_p: set[tuple[int, int, int]] = set()
-        if pref_p_id_ict_ft is not None:
-            self.pref_p.add(pref_p_id_ict_ft)
-        self.dag_deadline: int = task.dag.deadline
 
-"""
 class Processor:
 
     current_running_task: Task = None
@@ -474,9 +463,11 @@ def heuristic_scheduler(env:Environment, time):
 
         # TODO First search available cache hits processors if the dag is shallow and high frequent
         # TODO First search available ict hit processors otherwise
-
-        # here we try schedule upcomming_task with priority cache then ict then rest
-        success = prio_scheduling(upcomming_task, cache_priority, ict_priority, idle_processor_id_set, env, time)
+        if upcomming_task.dag.child_depth < 4: # four is related to the cache size
+            success = prio_scheduling(upcomming_task, ict_priority, cache_priority, idle_processor_id_set, env, time)
+        else:
+            # here we try schedule upcomming_task with priority cache then ict then rest
+            success = prio_scheduling(upcomming_task, cache_priority, ict_priority, idle_processor_id_set, env, time)
 
     return
 
