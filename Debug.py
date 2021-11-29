@@ -424,6 +424,7 @@ def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[T
     idle_processors = list(filter(lambda proc: proc.is_idle, processor_list))
     if len(idle_processors) == 0:
         return has_scheduled
+    idle_processor_id_set = set([proc.id for proc in idle_processors])
     upcomming_tasks.sort(key=lambda task: heuristic(task, time, idle_processors), reverse=True)
     # print([t.task.name for t in upcomming_tasks])
     # print("Is p idle?", [p.is_idle for p in processor_list])
@@ -432,35 +433,71 @@ def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[T
         # here we only continue if atleast one processor is available
         # but maybe extracting only the available processors will make 
         # the program even faster
-        idle_processors = list(filter(lambda proc: proc.is_idle, processor_list))
-        if len(idle_processors) == 0:
+        # idle_processors = list(filter(lambda proc: proc.is_idle, processor_list))
+        if len(idle_processor_id_set) == 0:
             return has_scheduled
         # print("trying task", todo.task.name)
         success = False
+
         p_priority = sorted(list(upcomming_task.pref_p),
                             key=lambda t: t[2] + t[1] - time,
                             reverse=True)
-        ict_priority = set([p_id for p_id, _, _ in p_priority])
+        ict_priority = set([p_id for p_id, _, _ in p_priority]).intersection(idle_processor_id_set)
 
         cache_priority = set()
         for p_id, proc in enumerate(processor_list):
-            if upcomming_task._type in [cached_task._type for cached_task in proc.cache]:
+            if upcomming_task._type in [cached_task._type for cached_task in proc.cache] and p_id in idle_processor_id_set:
                 cache_priority.add(p_id)
 
-        non_prioriticed_processors = set(range(len(processor_list))).difference(cache_priority).difference(ict_priority)
+        non_prioriticed_processors = idle_processor_id_set.difference(cache_priority).difference(ict_priority)
 
         # First search available cache hits processors if the dag is shallow and high frequent
         # First search available ict hit processors otherwise
+        success, p_id_scheduled = try_schedule_on(cache_priority.intersection(ict_priority), upcomming_task, time, upcomming_tasks, processor_list)
+        if success:
+            idle_processor_id_set.remove(p_id_scheduled)
+            has_scheduled = True
+            continue
+        success, p_id_scheduled = try_schedule_on(cache_priority.difference(ict_priority), upcomming_task, time, upcomming_tasks, processor_list)
+        if success:
+            idle_processor_id_set.remove(p_id_scheduled)
+            has_scheduled = True
+            continue
+        success, p_id_scheduled = try_schedule_on(ict_priority.difference(cache_priority), upcomming_task, time, upcomming_tasks, processor_list)
+        if success:
+            idle_processor_id_set.remove(p_id_scheduled)
+            has_scheduled = True
+            continue
+        success, p_id_scheduled = try_schedule_on(non_prioriticed_processors, upcomming_task, time, upcomming_tasks, processor_list)
+        if success:
+            idle_processor_id_set.remove(p_id_scheduled)
+            has_scheduled = True
+            continue
 
-        if try_schedule_on(cache_priority.intersection(ict_priority), upcomming_task, time, upcomming_tasks, processor_list):
-            has_scheduled = True
-        elif try_schedule_on(cache_priority.difference(ict_priority), upcomming_task, time, upcomming_tasks, processor_list):
-            has_scheduled = True
-        elif try_schedule_on(ict_priority.difference(cache_priority), upcomming_task, time, upcomming_tasks, processor_list):
-            has_scheduled = True
-        elif try_schedule_on(non_prioriticed_processors, upcomming_task, time, upcomming_tasks, processor_list):
-            has_scheduled = True
+    return has_scheduled
 
+def cache_prio_schedule(upcomming_task:Task, time:int, upcomming_tasks:list[Task], processor_list:list[Processor]):
+    p_priority = sorted(list(upcomming_task.pref_p),
+                    key=lambda t: t[2] + t[1] - time,
+                    reverse=True)
+    ict_priority = set([p_id for p_id, _, _ in p_priority])
+
+    cache_priority = set()
+    for p_id, proc in enumerate(processor_list):
+        if upcomming_task._type in [cached_task._type for cached_task in proc.cache]:
+            cache_priority.add(p_id)
+
+    non_prioriticed_processors = set(range(len(processor_list))).difference(cache_priority).difference(ict_priority)
+
+    success, p_id_scheduled = try_schedule_on(cache_priority.intersection(ict_priority), upcomming_task, time, upcomming_tasks, processor_list)
+    if try_schedule_on(cache_priority.intersection(ict_priority), upcomming_task, time, upcomming_tasks, processor_list):
+        has_scheduled = True
+    elif try_schedule_on(cache_priority.difference(ict_priority), upcomming_task, time, upcomming_tasks, processor_list):
+        has_scheduled = True
+    elif try_schedule_on(ict_priority.difference(cache_priority), upcomming_task, time, upcomming_tasks, processor_list):
+        has_scheduled = True
+    elif try_schedule_on(non_prioriticed_processors, upcomming_task, time, upcomming_tasks, processor_list):
+        has_scheduled = True
     return has_scheduled
 
 def try_schedule_on(processor_set:set[Processor], upcomming_task:Task, time:int, upcomming_tasks:list[Task], processor_list:list[Processor]):
@@ -469,8 +506,8 @@ def try_schedule_on(processor_set:set[Processor], upcomming_task:Task, time:int,
         success = processor_list[p_id].start(upcomming_task, time)
         if success:
             pop_task_from_list(upcomming_task, upcomming_tasks, time, p_id)
-            break
-    return success
+            return success, p_id
+    return success, -1
 
 def heuristic(task: Task, time: int, processor_list:list[Processor]):
     # Time until deadline
@@ -489,8 +526,8 @@ def heuristic(task: Task, time: int, processor_list:list[Processor]):
     h3 = 0
     for proc in processor_list:
         h3 += int(task._type in [cached_task._type for cached_task in proc.cache])
-    if h3 > 0:
-        h3 = len(processor_list) - h3
+    #if h3 > 0:
+    #    h3 = len(processor_list) - h3
     # h3 /= len(processor_list)
     h = h0 + 0.1*h1 + 1.5 * h2 
     return h
