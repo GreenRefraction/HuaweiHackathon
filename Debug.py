@@ -19,14 +19,18 @@ class Task:
 
         self.children: list[(Task, int)] = list()
         self.parents: list[(Task, int)] = list()
+        self.n_children:int = 0
 
         self.is_complete: bool = False
         self.dag = dag
 
         self.finish_time = None
         self.is_complete: bool = None
-        self.effective_depth: int = None
-        self.norm_effective_depth: int = None
+
+        # attributes about the depth from self
+        self.EET_depth: int = None
+        self.norm_EET_depth: int = None
+        self.child_depth = None
 
         # attributes from TODO class
         self.min_start_time: int = None
@@ -36,6 +40,7 @@ class Task:
         self.dag_deadline: int = self.dag.deadline
         self.dag_period: int = self.dag.period
         self.max_ict = None
+
 
     # from the list of parents, find the max eet for this task
     # and that would be the starting time for this task.
@@ -53,17 +58,30 @@ class Task:
         self.is_complete = True
 
     def calc_effective_depth(self):
-        if self.effective_depth is not None:
-            self.effective_depth
+        if self.EET_depth is not None:
+            return self.EET_depth
             
-        self.effective_depth = self.EET
+        self.EET_depth = self.EET
+        
         max_child_depth = 0
         for (c, _) in self.children:
             max_child_depth = max(max_child_depth, c.calc_effective_depth())
 
-        self.effective_depth += max_child_depth
-        self.norm_effective_depth = self.effective_depth / self.dag.deadline
-        return self.effective_depth
+        self.EET_depth += max_child_depth
+        self.norm_EET_depth = self.EET_depth / self.dag_deadline
+
+        return self.EET_depth
+
+    def calc_child_depth(self):
+        if self.child_depth is not None:
+            return self.child_depth
+        
+        max_depth = 0
+        for (c, _) in self.children:
+            max_depth = max(max_depth, c.calc_child_depth())
+        
+        self.child_depth = max_depth + 1
+        return self.child_depth
 
     def __str__(self) -> str:
         return json.dumps(str(self.__dict__), default=lambda o: o.name if type(o) == Task else str(o.__dict__))
@@ -111,11 +129,13 @@ class DAG:
             if not len(task.children) > 0:
                 self.exit_tasks.append(task)
         
-        # Calculate task depth
+        # Calculate task depth and child depth
         self.max_depth: int = 0
         for task in self.entry_tasks:
+            task.n_children = len(task.children)
             task.calc_effective_depth()
-            self.max_depth = max(task.effective_depth, self.max_depth)
+            task.calc_child_depth()
+            self.max_depth = max(task.EET_depth, self.max_depth)
 
         self.task_list = list(name_to_task.values())
 
@@ -492,7 +512,7 @@ def try_schedule_on(upcomming_task:Task, processor_set:set[Processor], time:int,
 
 def heuristic(task: Task, time: int, processor_list:list[Processor]):
     # Time until deadline
-    h0 = -(task.dag.deadline - time)
+    h0 = -(task.dag_deadline - time)
     # Max posible communication penalty (ict)
     h1 = 0
     for p_id, ict, ft in task.pref_p:
@@ -500,7 +520,7 @@ def heuristic(task: Task, time: int, processor_list:list[Processor]):
     #h1 /= task.max_ict
     # execution time left of the dags longest path from todo.task 
     # h2 = task.norm_effective_depth  # normalized with the deadline of dag
-    h2 = task.effective_depth
+    h2 = task.EET_depth
     # h3 = todo.task.norm_effective_depth  # normalized with the deadline of dag
     
     # h3 = 1/(1-min(abs(h0)/h2, 0.999999999))
@@ -510,7 +530,7 @@ def heuristic(task: Task, time: int, processor_list:list[Processor]):
     #if h3 > 0:
     #    h3 = len(processor_list) - h3
     # h3 /= len(processor_list)
-    h = h0 + 0.1*h1 + 1.5 * h2 
+    h = h0 + h1 + h2 
     return h
     # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
 
@@ -669,7 +689,6 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
 
 
 if __name__ == '__main__':
-
     """dag_list = load_from_json("sample.json")
     execution_history0 = [(0, 0, 10),(3, 43, 53),(1000, 60, 69),(1003, 99, 108)]
     execution_history1 = [(1, 11, 31), (1001, 70, 88)]
