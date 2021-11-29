@@ -19,14 +19,28 @@ class Task:
 
         self.children: list[(Task, int)] = list()
         self.parents: list[(Task, int)] = list()
+        self.n_children:int = 0
 
         self.is_complete: bool = False
         self.dag = dag
 
         self.finish_time = None
         self.is_complete: bool = None
-        self.effective_depth: int = None
-        self.norm_effective_depth: int = None
+
+        # attributes about the depth from self
+        self.EET_depth: int = None
+        self.norm_EET_depth: int = None
+        self.child_depth = None
+
+        # attributes from TODO class
+        self.min_start_time: int = None
+        self.finish_time: int = None
+        # p_id ict finish_time
+        self.pref_p: set[tuple[int, int, int]] = set()
+        self.dag_deadline: int = self.dag.deadline
+        self.dag_period: int = self.dag.period
+        self.max_ict = None
+
 
     # from the list of parents, find the max eet for this task
     # and that would be the starting time for this task.
@@ -44,17 +58,30 @@ class Task:
         self.is_complete = True
 
     def calc_effective_depth(self):
-        if self.effective_depth is not None:
-            self.effective_depth
+        if self.EET_depth is not None:
+            return self.EET_depth
             
-        self.effective_depth = self.EET
+        self.EET_depth = self.EET
+        
         max_child_depth = 0
         for (c, _) in self.children:
             max_child_depth = max(max_child_depth, c.calc_effective_depth())
 
-        self.effective_depth += max_child_depth
-        self.norm_effective_depth = self.effective_depth / self.dag.deadline
-        return self.effective_depth
+        self.EET_depth += max_child_depth
+        self.norm_EET_depth = self.EET_depth / self.dag_deadline
+
+        return self.EET_depth
+
+    def calc_child_depth(self):
+        if self.child_depth is not None:
+            return self.child_depth
+        
+        max_depth = 0
+        for (c, _) in self.children:
+            max_depth = max(max_depth, c.calc_child_depth())
+        
+        self.child_depth = max_depth + 1
+        return self.child_depth
 
     def __str__(self) -> str:
         return json.dumps(str(self.__dict__), default=lambda o: o.name if type(o) == Task else str(o.__dict__))
@@ -70,7 +97,8 @@ class DAG:
 
         self._type: int = json_dag_data['Type']
         self.arrival_time: int = json_dag_data['ArrivalTime']
-        self.deadline: int = json_dag_data['Deadline']
+        self.period: int = json_dag_data['Deadline']
+        self.deadline: int = self.period + self.arrival_time
 
         self.is_complete: bool = False
         self._failed = False
@@ -101,12 +129,15 @@ class DAG:
             if not len(task.children) > 0:
                 self.exit_tasks.append(task)
         
-        # Calculate task depth
-        self.max_depth: int = 0
+        # Calculate task depth and child depth
+        self.EET_depth: int = 0
+        self.child_depth: int = 0
         for task in self.entry_tasks:
+            task.n_children = len(task.children)
             task.calc_effective_depth()
-            self.max_depth = max(task.effective_depth, self.max_depth)
-
+            task.calc_child_depth()
+            self.EET_depth = max(task.EET_depth, self.EET_depth)
+            self.child_depth = max(task.child_depth, self.child_depth)
         self.task_list = list(name_to_task.values())
 
     def tick(self) -> None:
@@ -118,19 +149,6 @@ class DAG:
 
     def __str__(self) -> str:
         return json.dumps(self.__dict__, default=lambda o: str(o) if type(o) == Task else o.__dict__, indent=4)
-
-
-class TODO:
-    def __init__(self, task, min_start_time, pref_p_id_ict_ft):
-        self.done = False
-        self.task: Task = task
-        self.min_start_time: int = min_start_time
-        self.finish_time: int = None
-        # p_id ict finish_time
-        self.pref_p: set[tuple[int, int, int]] = set()
-        if pref_p_id_ict_ft is not None:
-            self.pref_p.add(pref_p_id_ict_ft)
-        self.dag_deadline: int = task.dag.deadline
 
 
 class Processor:
@@ -186,7 +204,7 @@ class Processor:
         self.is_idle = True
         self.finish_time_of_running_task = None
 
-    def start(self, todo: TODO, t) -> bool:
+    def start(self, task: Task, t) -> bool:
         """attempt to start a new task"""
 
         if not self.is_idle:
@@ -196,9 +214,9 @@ class Processor:
         # if todo.task.name == "Task5023":
         #     print("min start time 5023", todo.min_start_time)
 
-        if todo.min_start_time > t:
+        if task.min_start_time > t:
             return False
-        for (parent, ict) in todo.task.parents:
+        for (parent, ict) in task.parents:
             # if todo.task.name == "Task5023":
             #     print(f"parrent {parent.name} to 5023 done:", parent.is_complete)
             if not parent.is_complete:
@@ -206,7 +224,7 @@ class Processor:
         # First check the communication time
         ict_list: list[int] = []
         pay_the_fee: bool = False
-        for (parent, ict) in todo.task.parents:
+        for (parent, ict) in task.parents:
             if parent not in self.answers:  # cleaning might speed up things, it will sure as hell save memory
                 # now we need to pay the ict fee
                 pay_the_fee = True
@@ -221,25 +239,24 @@ class Processor:
         # This needs to be changed to replicate
         # (parentFinishTime + communicationTime * (processors of parent and child are different)
 
-        self.current_running_task = todo.task
+        self.current_running_task = task
         self.is_idle = False
 
         # if task has the same _type we can reduce the EET by 10%
-        eet = todo.task.EET
-        if todo.task._type in [cached_task._type for cached_task in self.cache]:
+        eet = task.EET
+        if task._type in [cached_task._type for cached_task in self.cache]:
             eet = int(eet * 0.9)  # CHECK? rounding error?
             # print(t, "new instance", eet, todo.task.dag_id)
 
         self.finish_time_of_running_task = t + eet
         if pay_the_fee:
             self.finish_time_of_running_task += ict
-        todo.finish_time = self.finish_time_of_running_task
-        todo.task.finish_time = todo.finish_time  # TODO MARK CHECK THING
+        task.finish_time = self.finish_time_of_running_task
 
         # call on the execution history
-        task_id = int(todo.task.name[4:])
+        task_id = int(task.name[4:])
         self.execution_history.append(
-            (task_id, todo.finish_time - eet, todo.finish_time))
+            (task_id, task.finish_time - eet, task.finish_time))
 
         # add the eet to utilization_time
         self.utilization_time += eet + ict if pay_the_fee else eet
@@ -257,19 +274,40 @@ class Environment:
 
         self.upcomming_tasks: list[Task] = []
         self.time_stamp: int = 0
-        while len(self.dag_arrival) != 0 and self.dag_arrival[0].arrival_time <= self.time_stamp:
-            # print(self.dag_arrival[0].arrival_time, self.time_stamp)
-            self.upcomming_tasks.extend(
-                [TODO(t, self.time_stamp, None) for t in self.dag_arrival[0].entry_tasks])
-            self.dag_arrival.pop(0)
+        self.check_for_arriving_dags()
 
         self.processor_list: list[Processor] = processor_list
 
         self.counter = [0, 0, 0, 0]
         self.time_stamp_history: list[int] = [0]
+        
+        self.last_deadline = 0
+        self.max_ict = 0
+        for dag in dag_list:
+            self.last_deadline = max(self.last_deadline, dag.deadline)
+            for task in dag.task_list:
+                for (child, ict) in task.children:
+                    self.max_ict = max(self.max_ict, ict)
+        
+        for dag in dag_list:
+            for task in dag.task_list:
+                task.max_ict = self.max_ict
+        
 
-    def step(self, has_scheduled):
-        dt = self.calc_next_time_step(has_scheduled)
+
+    def check_for_arriving_dags(self) -> None:
+        while len(self.dag_arrival) != 0 and self.dag_arrival[0].arrival_time <= self.time_stamp:
+            # print(self.dag_arrival[0].arrival_time, self.time_stamp)
+            for arriving_task in self.dag_arrival[0].entry_tasks:
+                arriving_task.min_start_time = self.time_stamp
+                self.upcomming_tasks.append(arriving_task)
+                # self.upcomming_tasks.extend(
+                #     [TODO(t, self.time_stamp, None) for t in self.dag_arrival[0].entry_tasks])
+            dag_to_process = self.dag_arrival.pop(0)
+            self.processing_dag_list.append(dag_to_process)
+
+    def step(self):
+        dt = self.calc_next_time_step()
         self.time_stamp += dt
         self.time_stamp_history.append(self.time_stamp)
 
@@ -277,12 +315,7 @@ class Environment:
             processor.step(self.time_stamp)
 
         # keep the upcomming_tasks list up to date
-        while len(self.dag_arrival) != 0 and self.dag_arrival[0].arrival_time <= self.time_stamp:
-            # print(self.dag_arrival[0].arrival_time, self.time_stamp)
-            self.upcomming_tasks.extend(
-                [TODO(t, self.time_stamp, None) for t in self.dag_arrival[0].entry_tasks])
-            dag_to_process = self.dag_arrival.pop(0)
-            self.processing_dag_list.append(dag_to_process)
+        self.check_for_arriving_dags()
 
         # Now we want to check if we fail the task
 
@@ -296,7 +329,7 @@ class Environment:
             self.processing_dag_list.remove(dag)
 
         for dag in self.processing_dag_list:
-            if dag.arrival_time + dag.deadline < self.time_stamp:
+            if dag.deadline < self.time_stamp:
                 print("Failed")
                 # print(dag)
                 print(self.time_stamp)
@@ -318,7 +351,7 @@ class Environment:
         else:
             return None
 
-    def calc_next_time_step(self, has_scheduled):
+    def calc_next_time_step(self):
         # The first scenario is if all the processors are not available
         # i.e they are all busy, we can skip forward to the
         all_processors_are_busy = True
@@ -378,10 +411,10 @@ def load_from_json(file_name) -> list[DAG]:
 # - We if we have finished a task, we want to prioritize its children with the largest ict
 # - We want to utilize caching for tasks with large EET, i.e, same type of tasks should be scheduled on the same core within 4 scheduled tasks
 
-def sdf_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t):
+def sdf_scheduler(processor_list: list[Processor], upcomming_tasks: list[Task], t):
     has_scheduled = False
     upcomming_tasks.sort(
-        key=lambda todo: todo.task.dag.arrival_time + todo.task.dag.deadline)
+        key=lambda task: task.dag.deadline)
     # upcomming_tasks.sort(key=heuristic(todo))
 
     # Start any task that is available
@@ -397,67 +430,107 @@ def sdf_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], 
     return has_scheduled
 
 
-def heuristic_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], time):
-    has_scheduled = False
-    upcomming_tasks.sort(key=lambda td: heuristic(td, time), reverse=True)
+def heuristic_scheduler(env:Environment, time):
+    idle_processors = list(filter(lambda proc: proc.is_idle, env.processor_list))
+    if len(idle_processors) == 0:
+        return 
+    idle_processor_id_set = set([proc.id for proc in idle_processors])
+    env.upcomming_tasks.sort(key=lambda task: heuristic(task, time, idle_processors), reverse=True)
     # print([t.task.name for t in upcomming_tasks])
     # print("Is p idle?", [p.is_idle for p in processor_list])
 
-    for todo in upcomming_tasks.copy():
-        if True not in [p.is_idle for p in processor_list]:
-            return has_scheduled
+    for upcomming_task in env.upcomming_tasks.copy():
+        # here we only continue if atleast one processor is available
+        # but maybe extracting only the available processors will make 
+        # the program even faster
+        # idle_processors = list(filter(lambda proc: proc.is_idle, processor_list))
+        if len(idle_processor_id_set) == 0:
+            return 
         # print("trying task", todo.task.name)
         success = False
-        p_priority = sorted(list(todo.pref_p), 
-                            key=lambda t: t[2] + t[1] - time,
-                            reverse=True)
-        # if todo.task.name == "Task5023":
-        #     print("priority of 5023", p_priority)
-        # print(todo.task.name, p_priority)
-        for p_id, _, _ in p_priority:
-            success = processor_list[p_id].start(todo, time)
-            # if todo.task.name == "Task5023":
-            #     print("tried to sched 5023 with prio on", p_id, "result", success)
-            has_scheduled = has_scheduled or success
-            if success:
-                # print(t, p_id, to_sched.task.name)
-                pop_task_from_list(todo, upcomming_tasks, time, p_id)
-                break
+        
+        # Here we create a set of processor ids which should be prioritized according to the tasks
+        # largest ict
+        p_priority = sorted(list(upcomming_task.pref_p),key=lambda t: t[2] + t[1] - time, reverse=True)
+        ict_priority = set([p_id for p_id, _, _ in p_priority]).intersection(idle_processor_id_set)
+
+        # Here we create a set of processor ids which should be prioritized according to the tasks
+        # cache hits
+        cache_priority = set()
+        for p_id, proc in enumerate(env.processor_list):
+            if upcomming_task._type in [cached_task._type for cached_task in proc.cache] and p_id in idle_processor_id_set:
+                cache_priority.add(p_id)
+
+        # TODO First search available cache hits processors if the dag is shallow and high frequent
+        # TODO First search available ict hit processors otherwise
+        if upcomming_task.dag.child_depth < 4: # four is related to the cache size
+            success = prio_scheduling(upcomming_task, ict_priority, cache_priority, idle_processor_id_set, env, time)
+        else:
+            # here we try schedule upcomming_task with priority cache then ict then rest
+            success = prio_scheduling(upcomming_task, cache_priority, ict_priority, idle_processor_id_set, env, time)
+
+    return
+
+def prio_scheduling(upcomming_task:Task, set1:set[int], set2:set[int], total_set:set[int], env:Environment, time):
+    success = False
+    remaining = total_set.difference(set1).difference(set2)
+    success, p_id_scheduled = try_schedule_on(upcomming_task, set1.intersection(set2), time, env)
+    if success:
+        total_set.remove(p_id_scheduled)
+        return success
+    success, p_id_scheduled = try_schedule_on(upcomming_task, set1.difference(set2), time, env)
+    if success:
+        total_set.remove(p_id_scheduled)
+        return success
+    success, p_id_scheduled = try_schedule_on(upcomming_task, set2.difference(set1), time, env)
+    if success:
+        total_set.remove(p_id_scheduled)
+        return success
+    success, p_id_scheduled = try_schedule_on(upcomming_task, remaining, time, env)
+    if success:
+        total_set.remove(p_id_scheduled)
+        return success
+    return success
+
+def try_schedule_on(upcomming_task:Task, processor_set:set[Processor], time:int, env:Environment):
+    success = False
+    for p_id in processor_set:
+        success = env.processor_list[p_id].start(upcomming_task, time)
         if success:
-            continue
-        for p_id in set(range(len(processor_list))).difference([p_id for p_id, _, _ in todo.pref_p]):
-            success = processor_list[p_id].start(todo, time)
-            has_scheduled = has_scheduled or success
-            # if todo.task.name == "Task5023":
-            #     print("tried to sched 5023 on", p_id, "result", success)
-            if success:
-                # print(t, p_id, to_sched.task.name)
-                pop_task_from_list(todo, upcomming_tasks, time, p_id)
-                break
-    return has_scheduled
+            pop_task_from_list(upcomming_task, env.upcomming_tasks, time, p_id)
+            return success, p_id
+    return success, -1
 
-
-def heuristic(todo: TODO, time: int):
+def heuristic(task: Task, time: int, processor_list:list[Processor]):
     # Time until deadline
-    h0 = -(todo.task.dag.arrival_time + todo.task.dag.deadline - time)
+    h0 = -(task.dag_deadline - time)
     # Max posible communication penalty (ict)
     h1 = 0
-    for p_id, ict, ft in todo.pref_p:
+    for p_id, ict, ft in task.pref_p:
         h1 = max(h1, ft + ict - time)
+    #h1 /= task.max_ict
     # execution time left of the dags longest path from todo.task 
-    # h2 = todo.task.norm_effective_depth  # normalized with the deadline of dag
-    h2 = todo.task.effective_depth
+    # h2 = task.norm_effective_depth  # normalized with the deadline of dag
+    h2 = task.EET_depth
+    
+    # h3 should be the time gain if we are able to find a cache hit
+    cache_hits = 0
+    time_save = int(0.1*task.EET)
+    for proc in processor_list:
+        cache_hits += int(task._type in [cached_task._type for cached_task in proc.cache])
+    # now multiply time_save with the complement of cache_hits
+    # giving high priority if there are only few cache hits
+    h3 = time_save # * (len(processor_list) - cache_hits)
 
-    h = 10*h0 + h1 + 10*h2
-    # print(todo.task.name, h)
+    h = h0 + h1 + h2 + 0.5*h3
     return h
     # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
 
 
-def sdf_p_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t) -> None:
+def sdf_p_scheduler(processor_list: list[Processor], upcomming_tasks: list[Task], t) -> None:
     has_scheduled = False
     upcomming_tasks.sort(
-        key=lambda todo: todo.task.dag.arrival_time + todo.task.dag.deadline)
+        key=lambda task: task.dag.deadline)
     # Start any task that is available
 
     for todo in upcomming_tasks:
@@ -481,7 +554,7 @@ def sdf_p_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO]
     return has_scheduled
 
 
-def rbfs_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO], t, real_start_time):
+def rbfs_scheduler(processor_list: list[Processor], upcomming_tasks: list[Task], t, real_start_time):
     # the goal here is to use a heuristic to evaluate each action that the scheduler is taking
     # maybe combine this with a bfs search, but idk if this is thesible
 
@@ -501,18 +574,19 @@ def rbfs_scheduler(processor_list: list[Processor], upcomming_tasks: list[TODO],
     pass
 
 
-def pop_task_from_list(task_to_remove: TODO, upcomming_tasks: list[TODO], t: int, p_id: int):
+def pop_task_from_list(task_to_remove: Task, upcomming_tasks: list[Task], t: int, p_id: int):
     # before we delete the task[idx] we want to append the children of that task to the upcomming tasks list
-    for (child, ict) in task_to_remove.task.children:
-        for upc_todo in upcomming_tasks:
-            if upc_todo.task == child:
-                upc_todo.min_start_time = max(
-                    upc_todo.min_start_time, task_to_remove.finish_time)
-                upc_todo.pref_p.add((p_id, ict, task_to_remove.finish_time))
+    for (child, ict) in task_to_remove.children:
+        for upcomming_task in upcomming_tasks:
+            if upcomming_task == child:
+                upcomming_task.min_start_time = max(
+                    upcomming_task.min_start_time, task_to_remove.finish_time)
+                upcomming_task.pref_p.add((p_id, ict, task_to_remove.finish_time))
                 break
         else:
-            upcomming_tasks.append(
-                TODO(child, task_to_remove.finish_time, (p_id, ict, task_to_remove.finish_time)))
+            child.min_start_time = task_to_remove.finish_time
+            child.pref_p.add((p_id, ict, task_to_remove.finish_time))
+            upcomming_tasks.append(child)
     upcomming_tasks.remove(task_to_remove)
 
 
@@ -573,7 +647,7 @@ def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_tim
 
 def main(input_filename: str, output_filename: str, n_processors: int = 8):
     dag_list: list[DAG] = load_from_json(input_filename)
-    print(len(dag_list))
+
 
     # something that keeps track of what we've done
     # initialze a empty schedule, the history
@@ -583,15 +657,16 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
     processor_list = [Processor(i) for i in range(n_processors)]
 
     env = Environment(dag_list, processor_list)
+    print("Final Deadline:", env.last_deadline)
+    print("Largest ICT", env.max_ict)
     try:
         start_time = time.time_ns()
         # Only works when the dags isn't repopulated
         while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:
             # print("-"*30)
             # print("Env time stamp", env.time_stamp)
-            env.step(heuristic_scheduler(processor_list,
-                                     env.upcomming_tasks,
-                                     env.time_stamp))
+            heuristic_scheduler(env, env.time_stamp)
+            env.step()
         stop_time = time.time_ns()
         # CHECK? rounding error?
         exec_time_scheduler = (stop_time - start_time)//1e6
@@ -606,7 +681,6 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
 
 
 if __name__ == '__main__':
-
     """dag_list = load_from_json("sample.json")
     execution_history0 = [(0, 0, 10),(3, 43, 53),(1000, 60, 69),(1003, 99, 108)]
     execution_history1 = [(1, 11, 31), (1001, 70, 88)]
@@ -628,10 +702,11 @@ if __name__ == '__main__':
     print(pn_std)
     print(utility)
     quit()"""
-
     testcases = [f"test{i}.json" for i in range(1, 13)]
 
+
     for i, test in enumerate(testcases):
+        #if i != 11: continue
         print("-"*20)
         processor_list, dag_list, _ = main("testcases/"+test,
                                            f"answer{i+1}.csv",
