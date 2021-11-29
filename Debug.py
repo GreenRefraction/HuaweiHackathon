@@ -295,8 +295,8 @@ class Environment:
             dag_to_process = self.dag_arrival.pop(0)
             self.processing_dag_list.append(dag_to_process)
 
-    def step(self, has_scheduled):
-        dt = self.calc_next_time_step(has_scheduled)
+    def step(self):
+        dt = self.calc_next_time_step()
         self.time_stamp += dt
         self.time_stamp_history.append(self.time_stamp)
 
@@ -340,7 +340,7 @@ class Environment:
         else:
             return None
 
-    def calc_next_time_step(self, has_scheduled):
+    def calc_next_time_step(self):
         # The first scenario is if all the processors are not available
         # i.e they are all busy, we can skip forward to the
         all_processors_are_busy = True
@@ -672,9 +672,8 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
         while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:
             # print("-"*30)
             # print("Env time stamp", env.time_stamp)
-            env.step(heuristic_scheduler(processor_list,
-                                     env.upcomming_tasks,
-                                     env.time_stamp))
+            heuristic_scheduler(processor_list, env.upcomming_tasks, env.time_stamp)
+            env.step()
         stop_time = time.time_ns()
         # CHECK? rounding error?
         exec_time_scheduler = (stop_time - start_time)//1e6
