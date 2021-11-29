@@ -512,16 +512,17 @@ def heuristic(task: Task, time: int, processor_list:list[Processor]):
     # execution time left of the dags longest path from todo.task 
     # h2 = task.norm_effective_depth  # normalized with the deadline of dag
     h2 = task.EET_depth
-    # h3 = todo.task.norm_effective_depth  # normalized with the deadline of dag
     
-    # h3 = 1/(1-min(abs(h0)/h2, 0.999999999))
-    h3 = 0
+    # h3 should be the time gain if we are able to find a cache hit
+    cache_hits = 0
+    time_save = int(0.1*task.EET)
     for proc in processor_list:
-        h3 += int(task._type in [cached_task._type for cached_task in proc.cache])
-    #if h3 > 0:
-    #    h3 = len(processor_list) - h3
-    # h3 /= len(processor_list)
-    h = h0 + h1 + h2 
+        cache_hits += int(task._type in [cached_task._type for cached_task in proc.cache])
+    # now multiply time_save with the complement of cache_hits
+    # giving high priority if there are only few cache hits
+    h3 = time_save # * (len(processor_list) - cache_hits)
+
+    h = h0 + h1 + h2 + 0.5*h3
     return h
     # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
 
