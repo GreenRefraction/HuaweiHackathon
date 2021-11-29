@@ -2,6 +2,8 @@ import json
 import time
 import csv
 import math
+
+from numpy.core.arrayprint import DatetimeFormat
 # from DAG import DAG
 # from Processor import Processor, TODO
 # from Environment import Environment
@@ -624,6 +626,52 @@ def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_tim
         spamwriter.writerow([int(elapsed_time)])
 
 
+class Action:
+    # A which contains the specifics of an action
+    def __init__(self) -> None:
+        pass
+
+class State:
+    def __init__(self, dag_list:list[DAG]) -> None:
+        
+        self.children:dict[State, Action] = None
+        self.dag_list = dag_list
+        # The state contains information about the current state at time t
+        # it tells you which processors are running what task
+        self.time_stamp = 0
+        self.processor_task_dict:dict[Processor, Task] = dict()
+        self.buffering_tasks: list[Task] = list()
+        self.processing_dags: list[DAG] = list()
+        # From this state a number of actions are available
+        # We can either wait a certain amount of time dt
+        # or we can schedule a task to an idle processor
+
+        # Note that the action space depends on the number of idle processors
+        pass
+
+    def explore_available_actions(self, dag_list:list[DAG]):
+        # sort the dags according to their arrival time
+        incomming_dags: list[DAG] = sorted(dag_list, key=lambda d: d.arrival_time)
+
+        # append all the incomming dags and upcomming tasks in their respective containers
+        while len(incomming_dags) != 0 and incomming_dags[0].arrival_time <= self.time_stamp:
+            # print(self.dag_arrival[0].arrival_time, self.time_stamp)
+            for arriving_task in incomming_dags[0].entry_tasks:
+                arriving_task.min_start_time = self.time_stamp
+                self.buffering_tasks.append(arriving_task)
+            dag_to_process = incomming_dags.pop(0)
+            self.processing_dags.append(dag_to_process)
+        
+    def explore_children(self):
+        # This function adds all the available new states that we can transition
+        # to for every available action
+
+        # for action in self.available_actions:
+            # self.children[action] = self.take_action(action)
+        pass
+
+
+
 def main(input_filename: str, output_filename: str, n_processors: int = 8):
     dag_list: list[DAG] = load_from_json(input_filename)
 
@@ -660,6 +708,11 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
 
 
 if __name__ == '__main__':
+    dag_list = load_from_json("sample.json")
+    root_state = State(dag_list)
+    root_state.explore_available_actions(dag_list)
+    dag0 = dag_list[0]
+    quit()
     """dag_list = load_from_json("sample.json")
     execution_history0 = [(0, 0, 10),(3, 43, 53),(1000, 60, 69),(1003, 99, 108)]
     execution_history1 = [(1, 11, 31), (1001, 70, 88)]
