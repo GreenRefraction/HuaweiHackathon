@@ -461,8 +461,6 @@ def heuristic_scheduler(env:Environment, time):
             if upcomming_task._type in [cached_task._type for cached_task in proc.cache] and p_id in idle_processor_id_set:
                 cache_priority.add(p_id)
 
-        # TODO First search available cache hits processors if the dag is shallow and high frequent
-        # TODO First search available ict hit processors otherwise
         if upcomming_task.dag.child_depth < 4: # four is related to the cache size
             success = prio_scheduling(upcomming_task, ict_priority, cache_priority, idle_processor_id_set, env, time)
         else:
