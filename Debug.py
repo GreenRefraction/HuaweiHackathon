@@ -59,6 +59,7 @@ class Task:
 
     def tick(self):
         self.is_complete = True
+        self.dag.tick()
 
     def calc_effective_depth(self):
         if self.EET_depth is not None:
@@ -88,6 +89,18 @@ class Task:
 
     def __str__(self) -> str:
         return json.dumps(str(self.__dict__), default=lambda o: o.name if type(o) == Task else str(o.__dict__))
+
+class TODO:
+    def __init__(self, task:Task, min_start_time:int, pref_p_id_ict_ft:tuple[int, int, int]):
+        self.is_complete = False
+        self.task: Task = task
+        self.min_start_time: int = min_start_time
+        self.finish_time: int = None
+        # p_id ict finish_time
+        self.pref_p: set[tuple[int, int, int]] = set()
+        if pref_p_id_ict_ft is not None:
+            self.pref_p.add(pref_p_id_ict_ft)
+        self.dag_deadline: int = task.dag_deadline
 
 
 class DAG:
@@ -199,6 +212,7 @@ class Processor:
             self.cache.pop(0)
 
         # tick the current task
+        print("TICK!!!")
         self.current_running_task.tick()
         # and tick the dag
         self.current_running_task.dag.tick()
@@ -207,7 +221,7 @@ class Processor:
         self.is_idle = True
         self.finish_time_of_running_task = None
 
-    def can_start(self, task:Task, t) -> bool:
+    def can_start(self, todo:TODO, t) -> bool:
 
         if not self.is_idle:
             return False
@@ -215,10 +229,9 @@ class Processor:
 
         # if todo.task.name == "Task5023":
         #     print("min start time 5023", todo.min_start_time)
-
-        if task.min_start_time > t:
+        if todo.min_start_time > t:
             return False
-        for (parent, ict) in task.parents:
+        for (parent, ict) in todo.task.parents:
             # if todo.task.name == "Task5023":
             #     print(f"parrent {parent.name} to 5023 done:", parent.is_complete)
             if not parent.is_complete:
@@ -595,11 +608,11 @@ class WaitForProcessorToFinishAction(Action):
     def __init__(self, processor:Processor, time_stamp) -> None:
         self.processor = processor
         self.finish_time = processor.finish_time_of_running_task
-        dt = self.finish_time - time_stamp
+        dt = self.finish_time - time_stamp 
         super(WaitForProcessorToFinishAction, self).__init__(dt)
     
     def __str__(self) -> str:
-        return f"Wait for processor: {self.processor.id} which finishes in {self.dt}"
+        return f"Wait for processor: {self.processor.id} which finishes in {self.dt} with task {self.processor.current_running_task.name}"
 
 class ScheduleTaskAction(Action):
     def __init__(self, task:Task, processor_id:int, time_stamp:int) -> None:
@@ -644,7 +657,7 @@ class State:
         self.dag_list_sorted = sorted(dag_list, key=lambda dag: dag.arrival_time)
         self.incomming_dags: list[DAG] = sorted(dag_list, key=lambda dag: dag.arrival_time)
         # A list of buffering Tasks
-        self.buffering_tasks: list[Task] = list()
+        self.buffering_tasks: list[TODO] = list()
         self.check_for_arriving_dags()
 
         # A list of all available Actions
@@ -659,12 +672,11 @@ class State:
         # heuristic is a value which tells you how valuable it is to be in 
         # this state
         self.heuristic = None
+        #self.explore_available_actions()
 
     def explore_available_actions(self):
         if self.available_actions is not None:
             return
-        # append all the incomming dags and upcomming tasks in their respective containers
-        self.check_for_arriving_dags()
         # We now have a list of currently processing dags
         # Now we want to evaluate all the available actions
         # Which means we can either wait until a processor finshes a task
@@ -674,8 +686,13 @@ class State:
         self.available_actions: list[Action] = list()
         for processor in idle_processors:
             for task in self.buffering_tasks:
-                schedule_task_action = ScheduleTaskAction(task, processor.id, self.time_stamp)
-                self.available_actions.append(schedule_task_action)
+                can_start = processor.can_start(task, self.time_stamp)
+                if not can_start:
+                    print(task.min_start_time, self.time_stamp, task.parents[0][0].name)
+                    #task.parents[0][0].is_complete = True
+                if can_start:
+                    schedule_task_action = ScheduleTaskAction(task, processor.id, self.time_stamp)
+                    self.available_actions.append(schedule_task_action)
 
         # With all the running processors we can evaluate all actions
         # of type WaitForProcessorAction
@@ -692,13 +709,12 @@ class State:
     def explore_new_children(self):
         if self.children is not None or self.is_terminal:
             return
-
         # This function adds all the available new states that we can transition
         # to for every available action
         self.children:dict[Action, State] = dict()
         for action in self.available_actions:
             #print(action)
-            new_state = self.calc_new_child(action)
+            new_state = self.take_action(action)
             #print(new_state)
             new_state.heuristic = state_heuristic(new_state, action)
             self.children[action] = new_state
@@ -706,30 +722,59 @@ class State:
     def check_for_arriving_dags(self) -> None:
         while len(self.incomming_dags) != 0 and self.incomming_dags[0].arrival_time <= self.time_stamp:
             for arriving_task in self.incomming_dags[0].entry_tasks:
-                arriving_task.min_start_time = self.time_stamp
-                self.buffering_tasks.append(arriving_task)
+                todo = TODO(arriving_task, self.time_stamp, None)
+                self.buffering_tasks.append(todo)
             dag_to_process = self.incomming_dags.pop(0)
             self.processing_dags.append(dag_to_process)
 
-    def calc_new_child(self, action:Action):
+    def pop_task_from_list(self, task_to_remove: Task, processor_id:int):
+        # before we delete the task[idx] we want to append the children of that task to the upcomming tasks list
+        for (child, ict) in task_to_remove.children:
+            for upcomming_task in self.buffering_tasks:
+                if upcomming_task == child:
+                    upcomming_task.min_start_time = max(
+                        upcomming_task.min_start_time, task_to_remove.finish_time)
+                    upcomming_task.pref_p.add((processor_id, ict, task_to_remove.finish_time))
+                    break
+            else:
+                child.min_start_time = task_to_remove.finish_time
+                child.pref_p.add((processor_id, ict, task_to_remove.finish_time))
+                self.buffering_tasks.append(child)
+        self.buffering_tasks.remove(task_to_remove)
+
+    def take_action(self, action:Action):
         # Return a new child from self by taking the Action; action
         new_state:State = None
         if type(action) == WaitForProcessorToFinishAction or type(action) == WaitForNewIncommingDAGAction:
-            new_state = self.copy()
+            new_state = State(self.dag_list_sorted, deepcopy(self.processors), self.time_stamp + action.dt)
+            new_state.buffering_tasks = self.buffering_tasks.copy()
+            for id in range(len(new_state.processors)):
+                new_state.processors[id].current_running_task = copy(self.processors[id].current_running_task)
+                new_state.processors[id].answers = self.processors[id].answers.copy()
+                new_state.processors[id].cache = self.processors[id].cache.copy()
+                new_state.processors[id].step(new_state.time_stamp)
             new_state.available_actions = None
-            new_state.children = None
+            new_state.explore_available_actions()
             new_state.parent = self
-            new_state.time_stamp += action.dt
-            for processor in new_state.processors:
-                processor.step(new_state.time_stamp)
+            print(new_state)
+            quit()
+
         elif type(action) == ScheduleTaskAction:
             action:ScheduleTaskAction = action
+            todo:TODO = TODO(action.task, )
             new_state = State(self.dag_list_sorted, deepcopy(self.processors), self.time_stamp)
+            new_state.buffering_tasks = self.buffering_tasks.copy()
+            for id in range(len(new_state.processors)):
+                new_state.processors[id].current_running_task = copy(self.processors[id].current_running_task)
+                new_state.processors[id].answers = self.processors[id].answers.copy()
+                new_state.processors[id].cache = self.processors[id].cache.copy()
             #new_state.check_for_arriving_dags()
-            success = new_state.processors[action.processor_id].start(action.task, new_state.time_stamp)
-            #new_state.explore_available_actions()
-            if success:
-                pop_task_from_list(action.task, new_state.buffering_tasks, new_state.time_stamp, action.processor_id)
+            new_state.available_actions = None
+            new_state.processors[action.processor_id].start(action.task, new_state.time_stamp)
+            pop_task_from_list(action.task, new_state.buffering_tasks, new_state.time_stamp, action.processor_id)
+            new_state.explore_available_actions()
+            new_state.parent = self
+            #new_state.pop_task_from_list(action.task, action.processor_id)
         else:
             # Default, dunno what to do here
             raise Exception("ABORT")
@@ -775,7 +820,13 @@ class State:
             if not processor.is_idle:
                 id_list.append(processor.id)
                 task_list.append(processor.current_running_task.name)
-        return f"time: {self.time_stamp}, running processors:\n{str(id_list)}\n{str(task_list)}\n"
+        action_list = []
+        for action in self.available_actions:
+            action_list.append(str(action))
+        return f"time: {self.time_stamp}, running processors:\n"+\
+            f"{str(id_list)}\n"+\
+            f"{str(task_list)}\n"+\
+            f"Actions:{action_list}"
 
 def main(input_filename: str, output_filename: str, n_processors: int = 8):
     dag_list: list[DAG] = load_from_json(input_filename)
@@ -815,11 +866,9 @@ def state_heuristic(state:State, action:Action):
     """Evaluates a heuristic value of the state and the action which
     lead to that state"""
     soonest_deadline = 1e100
-
     for dag in state.processing_dags:
         for task in dag.task_list:
             soonest_deadline = min(soonest_deadline, task.dag_deadline)
-    
     return -soonest_deadline
 
 def dfs_search(root:State) -> State:
@@ -852,28 +901,33 @@ if __name__ == '__main__':
     #dag_list = sorted(dag_list, key=lambda d: d.arrival_time)
     root_state = State(dag_list, processor_list, 0)
     root_state.explore_available_actions()
-    root_state.explore_new_children()
+    #root_state.explore_new_children()
+
     print('-'*40)
     print(root_state)
     print("available actions", len(root_state.available_actions))
     print("buffer size:", len(root_state.buffering_tasks))
-    action0 = root_state.available_actions[0]
-    child0 = root_state.children[action0]
-    child0.explore_available_actions()
-    child0.explore_new_children()
+    print(list(map(lambda task: task.name, root_state.buffering_tasks)))
+    action0 = root_state.available_actions[2]
+    for action in root_state.available_actions:
+        print(action)
+
     print('-'*40)
+    child0 = root_state.take_action(action0)
+    #child0.explore_new_children()
+    
+    
     print(child0)
     print("available actions", len(child0.available_actions))
     print("buffer size:", len(child0.buffering_tasks))
-    for action in child0.available_actions:
-        print(action)
-    
     action00 = child0.available_actions[0]
     print(action00)
     print('-'*40)
-    child00 = child0.children[action00]
+    print("child00")
+    child00 = child0.take_action(action00)
+    print(child00)
+    quit()
     #print(child00)
-    child00.explore_available_actions()
     child00.explore_new_children()
     print(child00)
     print("available actions", len(child00.available_actions))
