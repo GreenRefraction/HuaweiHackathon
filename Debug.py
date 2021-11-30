@@ -514,15 +514,18 @@ def heuristic(task: Task, time: int, processor_list:list[Processor]):
     h2 = task.EET_depth
     
     # h3 should be the time gain if we are able to find a cache hit
-    cache_hits = 0
+    h3 = 0
     time_save = int(0.1*task.EET)
+    cache_hits = 0
     for proc in processor_list:
         cache_hits += int(task._type in [cached_task._type for cached_task in proc.cache])
+    if cache_hits > 0:
+        h3 = (len(processor_list) - cache_hits + 1) * time_save
     # now multiply time_save with the complement of cache_hits
     # giving high priority if there are only few cache hits
-    h3 = time_save # * (len(processor_list) - cache_hits)
+    # h3 = time_save # * (len(processor_list) - cache_hits)
 
-    h = h0 + h1 + h2 + 0.5*h3
+    h = h0 + h1 + h2 + h3
     return h
     # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
 
