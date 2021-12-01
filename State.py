@@ -17,7 +17,7 @@ class WaitForProcessorToFinishAction(Action):
         super(WaitForProcessorToFinishAction, self).__init__(dt)
     
     def __str__(self) -> str:
-        return f"Wait for processor: {self.processor.id} which finishes in {self.dt} with task {self.processor.current_running_task.task.name}"
+        return f"Wait for processor: {self.processor.id} which finishes in {self.dt} with task {self.processor.current_running_todoTask.task.name}"
 
 class ScheduleTaskAction(Action):
     def __init__(self, todo_task:TODOTask, processor_id:int, time_stamp:int) -> None:
@@ -107,9 +107,9 @@ class State:
             self.available_actions.append(wait_for_processor_action)
 
         # Now calculate all the actions of type WaitForNewIncommingDAGAction
-        if len(self.dag_list_sorted) !=  0:
+        if len(self.incomming_todoDAGs) !=  0:
             wait_for_dag_action = WaitForNewIncommingDAGAction(self.dag_list_sorted, self.time_stamp)
-            if wait_for_dag_action.dt != 0:
+            if wait_for_dag_action.dt > 0:
                 self.available_actions.append(wait_for_dag_action)
 
     def explore_new_children(self):
@@ -158,6 +158,7 @@ class State:
                     is_ready = False
                     break
             if is_ready is not None and is_ready:
+                child.min_start_time = min_start_time
                 self.buffering_todoTasks.append(child)
         #self.buffering_todoTasks.remove(todoTask_to_remove)
 
@@ -168,42 +169,29 @@ class State:
             new_state = State(self.dag_list_sorted, deepcopy(self.processors), self.time_stamp + action.dt)
             new_state.processing_todoDAGs = list()
             for p_id in range(len(new_state.processors)):
-                if new_state.processors[p_id].current_running_task is not None:
-                    new_state.processors[p_id].current_running_task.task = self.processors[p_id].current_running_task.task
-                    new_state.processing_todoDAGs.append(new_state.processors[p_id].current_running_task.todoDAG)
+                if new_state.processors[p_id].current_running_todoTask is not None:
+                    new_state.processors[p_id].current_running_todoTask.task = self.processors[p_id].current_running_todoTask.task
+                    new_state.processing_todoDAGs.append(new_state.processors[p_id].current_running_todoTask.todoDAG)
                 new_state.processors[p_id].answers = set()
                 for answer in self.processors[p_id].answers:
                     new_state.processors[p_id].answers.add(copy(answer))
                 new_state.processors[p_id].cache = copy(self.processors[p_id].cache)
                 new_state.processors[p_id].step(new_state.time_stamp)
-            
-            for todo in new_state.buffering_todoTasks:
-                print(todo.task.name)
             for todoDAG in new_state.processing_todoDAGs:
                 for todoTask in todoDAG.todo_list:
                     if todoTask.is_complete and todoTask.task in list(map(lambda todo: todo.task, new_state.buffering_todoTasks)):
-                        print("Triggered")
-                        print(len(new_state.buffering_todoTasks))
-                        print(todoTask.children)
                         new_state.pop_todoTask(todoTask, todoTask.prefered_processor)
-                        print(len(new_state.buffering_todoTasks))
-            print(new_state.processors[2].current_running_task)
-            print(len(new_state.buffering_todoTasks))
-            
-            quit()
-            print(new_state.buffering_todoTasks[0].is_complete)
             new_state.check_for_arriving_dags()
             new_state.available_actions = None
             new_state.explore_available_actions()
             new_state.parent = self
-            quit()
 
         elif type(action) == ScheduleTaskAction:
             action:ScheduleTaskAction = action
             new_state = State(self.dag_list_sorted, deepcopy(self.processors), self.time_stamp)
             
             for p_id in range(len(new_state.processors)):
-                new_state.processors[p_id].current_running_task = copy(self.processors[p_id].current_running_task)
+                new_state.processors[p_id].current_running_todoTask = copy(self.processors[p_id].current_running_todoTask)
                 new_state.processors[p_id].answers = self.processors[p_id].answers.copy()
                 new_state.processors[p_id].cache = self.processors[p_id].cache.copy()
             #new_state.check_for_arriving_dags()
@@ -258,7 +246,7 @@ class State:
         for processor in self.processors:
             if not processor.is_idle:
                 id_list.append(processor.id)
-                task_list.append(processor.current_running_task.task.name)
+                task_list.append(processor.current_running_todoTask.task.name)
         action_list = []
         for action in self.available_actions:
             action_list.append(str(action))

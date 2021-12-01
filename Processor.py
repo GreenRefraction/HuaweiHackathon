@@ -2,7 +2,7 @@ from Task import Task, TODOTask
 
 class Processor:
 
-    current_running_task: TODOTask = None
+    current_running_todoTask: TODOTask = None
     is_idle: bool = None
     finish_time_of_running_task: int = None
     utilization_time: int = None
@@ -37,19 +37,19 @@ class Processor:
     def finish(self):
         """Finish the task that is currently running"""
         # add to answers
-        self.answers.add(self.current_running_task)
+        self.answers.add(self.current_running_todoTask)
 
         # append to the cache
-        self.cache.append(self.current_running_task)
+        self.cache.append(self.current_running_todoTask.task)
         if len(self.cache) > self.cache_size:
             self.cache.pop(0)
 
         # tick the current task
-        self.current_running_task.tick()
+        self.current_running_todoTask.tick()
         # and tick the dag
-        self.current_running_task.todoDAG.tick()
-        self.current_running_task.prefered_processor = self.id
-        self.current_running_task = None
+        self.current_running_todoTask.todoDAG.tick()
+        self.current_running_todoTask.prefered_processor = self.id
+        self.current_running_todoTask = None
         self.is_idle = True
         self.finish_time_of_running_task = None
     def can_start(self, todo:TODOTask, t) -> bool:
@@ -69,18 +69,18 @@ class Processor:
                 return False
         return True
 
-    def start(self, todo_task: TODOTask, t) -> bool:
+    def start(self, todoTask: TODOTask, t) -> bool:
         """attempt to start a new task"""
-        if not self.can_start(todo_task, t):
+        if not self.can_start(todoTask, t):
             return False
         # First check the communication time
         ict_list: list[int] = []
         pay_the_fee: bool = False
-        for parent in todo_task.parents:
+        for parent in todoTask.parents:
             if parent not in self.answers:  # cleaning might speed up things, it will sure as hell save memory
                 # now we need to pay the ict fee
                 pay_the_fee = True
-                ict = parent.task.children[todo_task.task]
+                ict = parent.task.children[todoTask.task]
                 ict_list.append(max(0, parent.finish_time - t + ict))
                 # ict_list.append(ict)
             # else:
@@ -92,24 +92,24 @@ class Processor:
         # This needs to be changed to replicate
         # (parentFinishTime + communicationTime * (processors of parent and child are different)
 
-        self.current_running_task = todo_task
+        self.current_running_todoTask = todoTask
         self.is_idle = False
 
         # if task has the same _type we can reduce the EET by 10%
-        eet = todo_task.task.EET
-        if todo_task.task._type in [cached_task._type for cached_task in self.cache]:
+        eet = todoTask.task.EET
+        if todoTask.task._type in [cached_task._type for cached_task in self.cache]:
             eet = int(eet * 0.9)  # CHECK? rounding error?
             # print(t, "new instance", eet, todo.task.dag_id)
 
         self.finish_time_of_running_task = t + eet
         if pay_the_fee:
             self.finish_time_of_running_task += ict
-        todo_task.finish_time = self.finish_time_of_running_task
+        todoTask.finish_time = self.finish_time_of_running_task
 
         # call on the execution history
-        task_id = int(todo_task.task.name[4:])
+        task_id = int(todoTask.task.name[4:])
         self.execution_history.append(
-            (task_id, todo_task.finish_time - eet, todo_task.finish_time))
+            (task_id, todoTask.finish_time - eet, todoTask.finish_time))
 
         # add the eet to utilization_time
         self.utilization_time += eet + ict if pay_the_fee else eet

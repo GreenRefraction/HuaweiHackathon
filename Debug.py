@@ -233,25 +233,17 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
     return processor_list, dag_list, env
 
 
-def dfs_search(root:State) -> State:
+def dfs_search(root:State, min_make_span) -> State:
     if root.is_terminal:
         return root
     print('-'*40)
     print(root)
     
     # If the root is not terminal then continue searching
-    min_make_span = 1e100
     min_child = None
-    root.explore_available_actions()
-    root.explore_new_children()
-    for action, child in root.children.items():
-        print(action)
-        child.explore_available_actions()
-        child.explore_new_children()
-        print("available actions", len(child.available_actions))
-        print(len(child.buffering_todoTasks))
-        input()
-        terminal_state = dfs_search(child)
+    for action in root.available_actions:
+        child = root.take_action(action)
+        terminal_state = dfs_search(child, min_make_span)
         if terminal_state.make_span < min_make_span:
             min_child = terminal_state
             min_make_span = terminal_state.make_span
@@ -285,21 +277,22 @@ if __name__ == '__main__':
     print('-'*40)
     print("child00")
     child00 = child0.take_action(action00)
-    quit()
     print(child00)
-    quit()
     #print(child00)
-    child00.explore_new_children()
-    print(child00)
     print("available actions", len(child00.available_actions))
     for action in child00.available_actions:
         print(action)
-    print("buffer size:", len(child00.buffering_tasks))
-    print(child00.buffering_tasks)
+    print("buffer size:", len(child00.buffering_todoTasks))
+    print(child00.buffering_todoTasks)
 
+    action000 = child00.available_actions[0]
+    print('-' * 40)
+    print(action000)
+    child000 = child00.take_action(action000)
+    print(child000)
     quit()
-    terminal_state = dfs_search(root_state)
-
+    terminal_state = dfs_search(root_state, 1e100)
+    quit()
    
     testcases = [f"test{i}.json" for i in range(1, 13)]
 
