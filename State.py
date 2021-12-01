@@ -189,7 +189,11 @@ class State:
         elif type(action) == ScheduleTaskAction:
             action:ScheduleTaskAction = action
             new_state = State(self.dag_list_sorted, deepcopy(self.processors), self.time_stamp)
-            
+            new_processors = [Processor(i) for i in range(len(self.processors))]
+            for i, processor in enumerate(new_processors):
+                
+                pass
+
             for p_id in range(len(new_state.processors)):
                 new_state.processors[p_id].current_running_todoTask = copy(self.processors[p_id].current_running_todoTask)
                 new_state.processors[p_id].answers = self.processors[p_id].answers.copy()
