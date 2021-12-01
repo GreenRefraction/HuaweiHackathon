@@ -259,10 +259,11 @@ def dfs_search(root:State) -> State:
 
 if __name__ == '__main__':
     dag_list = load_from_json("sample.json")
+    dag_list = sorted(dag_list, key=lambda d: d.arrival_time)
     processor_list = [Processor(i) for i in range(3)]
-    #dag_list = sorted(dag_list, key=lambda d: d.arrival_time)
     todoDAG_list = [TODODAG(dag) for dag in dag_list]
-    root_state = State(todoDAG_list, processor_list, 0)
+    
+    root_state = State(dag_list, processor_list, 0)
     root_state.explore_available_actions()
     #root_state.explore_new_children()
 
@@ -274,18 +275,17 @@ if __name__ == '__main__':
     action0 = root_state.available_actions[2]
     print('-'*40)
     child0 = root_state.take_action(action0)
-    quit()
     #child0.explore_new_children()
-    
     
     print(child0)
     print("available actions", len(child0.available_actions))
-    print("buffer size:", len(child0.buffering_tasks))
+    print("buffer size:", len(child0.buffering_todoTasks))
     action00 = child0.available_actions[0]
     print(action00)
     print('-'*40)
     print("child00")
     child00 = child0.take_action(action00)
+    quit()
     print(child00)
     quit()
     #print(child00)

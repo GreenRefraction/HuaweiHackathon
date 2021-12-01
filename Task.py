@@ -67,13 +67,15 @@ class Task:
         return json.dumps(str(self.__dict__), default=lambda o: o.name if type(o) == Task else str(o.__dict__))
 
 class TODOTask:
-    def __init__(self, task:Task, todoDag, min_start_time:int, parents:list=[]):
+    def __init__(self, task:Task, todoDag, min_start_time:int):
         self.is_complete = False
         self.task: Task = task
         self.min_start_time: int = min_start_time
         self.finish_time: int = None
         # p_id ict finish_time
-        self.parents:list[TODOTask] = parents
+        self.parents:list[TODOTask] = list()
+        self.children:list[TODOTask] = list()
+        self.prefered_processor: dict[int, tuple[int, int]] = dict()
         self.dag_deadline: int = task.dag_deadline
         self.todoDAG = todoDag
 

@@ -63,9 +63,28 @@ class TODODAG:
         self.is_complete = False
 
         self.todo_list:list[TODOTask] = list()
-        for task in dag.entry_tasks:
-            todo = TODOTask(task, self, dag.arrival_time)
+        for task in dag.task_list:
+            todo = TODOTask(task, self, None)
             self.todo_list.append(todo)
+
+        # connect all the parents and children
+        for todo1 in self.todo_list:
+            for todo2 in self.todo_list:
+                if todo1.task in todo2.task.parents:
+                    todo1.children.append(todo2)
+                    todo2.parents.append(todo1)
+                elif todo2.task in todo2.task.parents:
+                    todo2.children.append(todo1)
+                    todo1.parents.append(todo2)
+        
+        self.entry_todo:list[TODOTask] = list()
+        self.exit_todo:list[TODOTask] = list()
+        for todo in self.todo_list:
+            if len(todo.parents) == 0:
+                self.entry_todo.append(todo)
+                todo.min_start_time = dag.arrival_time
+            if len(todo.children) == 0:
+                self.exit_todo.append(todo)
 
         self.arrival_time = dag.arrival_time
         self.deadline = dag.deadline
@@ -73,7 +92,7 @@ class TODODAG:
 
     def tick(self) -> None:
         """set is_complete to True if all of the tasks in this dag are complete"""
-        for todo in self.todo_list:
-            if todo.task.child_depth != 1 or not todo.is_complete:
+        for todo in self.exit_todo:
+            if not todo.is_complete:
                 return
         self.is_complete = True

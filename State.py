@@ -17,7 +17,7 @@ class WaitForProcessorToFinishAction(Action):
         super(WaitForProcessorToFinishAction, self).__init__(dt)
     
     def __str__(self) -> str:
-        return f"Wait for processor: {self.processor.id} which finishes in {self.dt} with task {self.processor.current_running_task.name}"
+        return f"Wait for processor: {self.processor.id} which finishes in {self.dt} with task {self.processor.current_running_task.task.name}"
 
 class ScheduleTaskAction(Action):
     def __init__(self, todo_task:TODOTask, processor_id:int, time_stamp:int) -> None:
@@ -53,7 +53,7 @@ class State:
     # it tells you which processors are running what task and which 
     # tasks are in the buffer. Assume that the constructor is only called once
     # and its for the root node. otherwise when creating children we utilize deepcopy
-    def __init__(self, TODOdag_list:list[TODODAG], processor_list:list[Processor], time_stamp) -> None:
+    def __init__(self, dag_list_sorted:list[DAG], processor_list:list[Processor], time_stamp) -> None:
         # A mapping of action to state along with a value of each action
         self.children: dict[Action, State] = None
         self.action_value: dict[Action, float] = dict()
@@ -62,9 +62,9 @@ class State:
         # The time
         self.time_stamp = time_stamp
         # A list of buffering DAGs
+        self.dag_list_sorted = dag_list_sorted
         self.processing_todoDAGs: list[TODODAG] = list()
-        self.todoDAG_list_sorted = sorted(TODOdag_list, key=lambda todoDAG: todoDAG.dag.arrival_time)
-        self.incomming_todoDAGs: list[TODODAG] = sorted(TODOdag_list, key=lambda todoDAG: todoDAG.dag.arrival_time)
+        self.incomming_todoDAGs: list[TODODAG] = [TODODAG(dag) for dag in dag_list_sorted]
         # A list of buffering Tasks
         self.buffering_todoTasks: list[TODOTask] = list()
         self.check_for_arriving_dags()
@@ -107,8 +107,8 @@ class State:
             self.available_actions.append(wait_for_processor_action)
 
         # Now calculate all the actions of type WaitForNewIncommingDAGAction
-        if len(self.todoDAG_list_sorted) !=  0:
-            wait_for_dag_action = WaitForNewIncommingDAGAction(self.todoDAG_list_sorted, self.time_stamp)
+        if len(self.dag_list_sorted) !=  0:
+            wait_for_dag_action = WaitForNewIncommingDAGAction(self.dag_list_sorted, self.time_stamp)
             if wait_for_dag_action.dt != 0:
                 self.available_actions.append(wait_for_dag_action)
 
@@ -127,58 +127,92 @@ class State:
 
     def check_for_arriving_dags(self) -> None:
         while len(self.incomming_todoDAGs) != 0 and self.incomming_todoDAGs[0].arrival_time <= self.time_stamp:
-            for arriving_task in self.incomming_todoDAGs[0].dag.entry_tasks:
-                todo = TODOTask(arriving_task, self.incomming_todoDAGs[0], self.time_stamp, None)
-                self.buffering_todoTasks.append(todo)
+            for arriving_todoTask in self.incomming_todoDAGs[0].entry_todo:
+                self.buffering_todoTasks.append(arriving_todoTask)
             dag_to_process = self.incomming_todoDAGs.pop(0)
             self.processing_todoDAGs.append(dag_to_process)
 
-    def pop_task_from_list(self, task_to_remove: TODOTask, processor_id:int):
-        # before we delete the task[idx] we want to append the children of that task to the upcomming tasks list
-        for (child, ict) in task_to_remove.children:
-            for upcomming_task in self.buffering_todoTasks:
-                if upcomming_task == child:
-                    upcomming_task.min_start_time = max(
-                        upcomming_task.min_start_time, task_to_remove.finish_time)
-                    upcomming_task.pref_p.add((processor_id, ict, task_to_remove.finish_time))
+    def pop_todoTask(self, todoTask_to_remove: TODOTask, processor_id:int):
+        # before we delete task_to_remove we want to append the children of that task to the upcomming tasks list
+        """for child in todoTask_to_remove.children:
+            for upcomming_todo in self.buffering_todoTasks:
+                if upcomming_todo.task == child.task:
+                    print("Found")
+                    upcomming_todo.min_start_time = max(upcomming_todo.min_start_time,
+                                                        todoTask_to_remove.finish_time)
+                    upcomming_todo.pref_p.add((processor_id, ict, todoTask_to_remove.finish_time))
                     break
             else:
-                child.min_start_time = task_to_remove.finish_time
-                child.pref_p.add((processor_id, ict, task_to_remove.finish_time))
+                print("Not found")
+                child.min_start_time = todoTask_to_remove.finish_time
+                child.pref_p.add((processor_id, ict, todoTask_to_remove.finish_time))
+                self.buffering_todoTasks.append(child)"""
+        self.buffering_todoTasks = list(filter(lambda todo: todo.task != todoTask_to_remove.task, self.buffering_todoTasks))        
+        for child in todoTask_to_remove.children:
+            min_start_time = 1e100
+            is_ready = True
+            for parent in child.parents:
+                if parent.is_complete:
+                    min_start_time = min(min_start_time, parent.finish_time)
+                else:
+                    is_ready = False
+                    break
+            if is_ready is not None and is_ready:
                 self.buffering_todoTasks.append(child)
-        self.buffering_todoTasks.remove(task_to_remove)
+        #self.buffering_todoTasks.remove(todoTask_to_remove)
 
     def take_action(self, action:Action):
         # Return a new child from self by taking the Action; action
         new_state:State = None
         if type(action) == WaitForProcessorToFinishAction or type(action) == WaitForNewIncommingDAGAction:
-            new_state = State(self.todoDAG_list_sorted, deepcopy(self.processors), self.time_stamp + action.dt)
-            new_state.buffering_todoTasks = self.buffering_todoTasks.copy()
-            for id in range(len(new_state.processors)):
-                new_state.processors[id].current_running_task = copy(self.processors[id].current_running_task)
-                new_state.processors[id].answers = self.processors[id].answers.copy()
-                new_state.processors[id].cache = self.processors[id].cache.copy()
-                new_state.processors[id].step(new_state.time_stamp)
+            new_state = State(self.dag_list_sorted, deepcopy(self.processors), self.time_stamp + action.dt)
+            new_state.processing_todoDAGs = list()
+            for p_id in range(len(new_state.processors)):
+                if new_state.processors[p_id].current_running_task is not None:
+                    new_state.processors[p_id].current_running_task.task = self.processors[p_id].current_running_task.task
+                    new_state.processing_todoDAGs.append(new_state.processors[p_id].current_running_task.todoDAG)
+                new_state.processors[p_id].answers = set()
+                for answer in self.processors[p_id].answers:
+                    new_state.processors[p_id].answers.add(copy(answer))
+                new_state.processors[p_id].cache = copy(self.processors[p_id].cache)
+                new_state.processors[p_id].step(new_state.time_stamp)
+            
+            for todo in new_state.buffering_todoTasks:
+                print(todo.task.name)
+            for todoDAG in new_state.processing_todoDAGs:
+                for todoTask in todoDAG.todo_list:
+                    if todoTask.is_complete and todoTask.task in list(map(lambda todo: todo.task, new_state.buffering_todoTasks)):
+                        print("Triggered")
+                        print(len(new_state.buffering_todoTasks))
+                        print(todoTask.children)
+                        new_state.pop_todoTask(todoTask, todoTask.prefered_processor)
+                        print(len(new_state.buffering_todoTasks))
+            print(new_state.processors[2].current_running_task)
+            print(len(new_state.buffering_todoTasks))
+            
+            quit()
+            print(new_state.buffering_todoTasks[0].is_complete)
+            new_state.check_for_arriving_dags()
             new_state.available_actions = None
             new_state.explore_available_actions()
             new_state.parent = self
-            print(new_state)
             quit()
 
         elif type(action) == ScheduleTaskAction:
             action:ScheduleTaskAction = action
-            new_state = State(self.todoDAG_list_sorted, deepcopy(self.processors), self.time_stamp)
-            new_state.buffering_todoTasks = self.buffering_todoTasks.copy()
-            for id in range(len(new_state.processors)):
-                new_state.processors[id].current_running_task = copy(self.processors[id].current_running_task)
-                new_state.processors[id].answers = self.processors[id].answers.copy()
-                new_state.processors[id].cache = self.processors[id].cache.copy()
+            new_state = State(self.dag_list_sorted, deepcopy(self.processors), self.time_stamp)
+            
+            for p_id in range(len(new_state.processors)):
+                new_state.processors[p_id].current_running_task = copy(self.processors[p_id].current_running_task)
+                new_state.processors[p_id].answers = self.processors[p_id].answers.copy()
+                new_state.processors[p_id].cache = self.processors[p_id].cache.copy()
             #new_state.check_for_arriving_dags()
             new_state.available_actions = None
             new_state.processors[action.processor_id].start(action.todo_task, new_state.time_stamp)
-            new_state.pop_task_from_list(action.todo_task, new_state.buffering_todoTasks, new_state.time_stamp, action.processor_id)
+            new_state.pop_todoTask(action.todo_task, action.processor_id)
             new_state.explore_available_actions()
             new_state.parent = self
+            
             #new_state.pop_task_from_list(action.task, action.processor_id)
         else:
             # Default, dunno what to do here
@@ -224,7 +258,7 @@ class State:
         for processor in self.processors:
             if not processor.is_idle:
                 id_list.append(processor.id)
-                task_list.append(processor.current_running_task.name)
+                task_list.append(processor.current_running_task.task.name)
         action_list = []
         for action in self.available_actions:
             action_list.append(str(action))

@@ -2,7 +2,7 @@ from Task import Task, TODOTask
 
 class Processor:
 
-    current_running_task: Task = None
+    current_running_task: TODOTask = None
     is_idle: bool = None
     finish_time_of_running_task: int = None
     utilization_time: int = None
@@ -12,7 +12,7 @@ class Processor:
 
     # This set contains the answer of a task which is
     # idk what to call this
-    answers: set[Task] = None
+    answers: set[TODOTask] = None
     # some sort of history of what tasks that were scheduled
     execution_history: list[tuple[int, int, int]] = None
 
@@ -45,15 +45,13 @@ class Processor:
             self.cache.pop(0)
 
         # tick the current task
-        print("TICK!!!")
         self.current_running_task.tick()
         # and tick the dag
-        self.current_running_task.dag.tick()
-
+        self.current_running_task.todoDAG.tick()
+        self.current_running_task.prefered_processor = self.id
         self.current_running_task = None
         self.is_idle = True
         self.finish_time_of_running_task = None
-
     def can_start(self, todo:TODOTask, t) -> bool:
 
         if not self.is_idle:
@@ -64,7 +62,7 @@ class Processor:
         #     print("min start time 5023", todo.min_start_time)
         if todo.min_start_time > t:
             return False
-        for (parent, ict) in todo.task.parents:
+        for parent in todo.parents:
             # if todo.task.name == "Task5023":
             #     print(f"parrent {parent.name} to 5023 done:", parent.is_complete)
             if not parent.is_complete:
