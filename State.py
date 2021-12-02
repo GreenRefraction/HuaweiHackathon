@@ -40,7 +40,7 @@ class WaitForNewIncommingDAGAction(Action):
             raise NoArrivingDAGsException()
         dt = self.soonest_arrival_time - time_stamp
         super(WaitForNewIncommingDAGAction, self).__init__(dt)
-    
+
     def __str__(self) -> str:
         return f"Wait until {self.soonest_arrival_time}"
 
@@ -189,10 +189,9 @@ class State:
         elif type(action) == ScheduleTaskAction:
             action:ScheduleTaskAction = action
             new_state = State(self.dag_list_sorted, deepcopy(self.processors), self.time_stamp)
-            new_processors = [Processor(i) for i in range(len(self.processors))]
-            for i, processor in enumerate(new_processors):
-                
-                pass
+            new_state.buffering_todoTasks = list()
+            for todo in self.buffering_todoTasks:
+                new_state.buffering_todoTasks.append(copy(todo))
 
             for p_id in range(len(new_state.processors)):
                 new_state.processors[p_id].current_running_todoTask = copy(self.processors[p_id].current_running_todoTask)

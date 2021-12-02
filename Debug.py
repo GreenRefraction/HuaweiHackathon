@@ -258,7 +258,7 @@ if __name__ == '__main__':
     root_state = State(dag_list, processor_list, 0)
     root_state.explore_available_actions()
     #root_state.explore_new_children()
-
+    
     print('-'*40)
     print(root_state)
     print("available actions", len(root_state.available_actions))
@@ -288,8 +288,27 @@ if __name__ == '__main__':
     action000 = child00.available_actions[0]
     print('-' * 40)
     print(action000)
+    print(action000.processor_id)
     child000 = child00.take_action(action000)
     print(child000)
+    for action in child000.available_actions:
+        print(action)
+
+
+    print('-'*40)
+    action0000 = child000.available_actions[0]
+    child0000 = child000.take_action(action0000)
+    print(child0000)
+    print(child0000.buffering_todoTasks)
+
+    action00000 = child0000.available_actions[0]
+    print(action00000)
+    print('-'*40)
+    child00000 = child0000.take_action(action00000)
+    print(child00000)
+    print(child00000.buffering_todoTasks[0].task.name)
+    
+    
     quit()
     terminal_state = dfs_search(root_state, 1e100)
     quit()

@@ -6,8 +6,10 @@ class Task:
         self.EET = json_task_data['EET']
         self._type = json_task_data['Type']
 
-        self.children: dict[Task, int] = dict()
-        self.parents: dict[Task, int] = dict()
+        self.children: list[Task] = list()
+        self.parents: list[Task] = list()
+        self.ict_to_parents: dict[str, int] = dict()
+        self.ict_to_children: dict[str, int] = dict()
         self.n_children:int = 0
 
         self.dag = dag
@@ -25,10 +27,12 @@ class Task:
     # and that would be the starting time for this task.
 
     def add_child(self, task, ict):
-        self.children[task] = ict
+        self.ict_to_children[task.name] = ict
+        self.children.append(task)
 
     def add_parent(self, task, ict):
-        self.parents[task] = ict
+        self.parents.append(task)
+        self.ict_to_parents[task.name] = ict
 
     def add_dag(self, dag):
         self.dag = dag

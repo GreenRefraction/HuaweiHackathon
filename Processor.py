@@ -80,7 +80,7 @@ class Processor:
             if parent not in self.answers:  # cleaning might speed up things, it will sure as hell save memory
                 # now we need to pay the ict fee
                 pay_the_fee = True
-                ict = parent.task.children[todoTask.task]
+                ict = parent.task.ict_to_children[todoTask.task.name]
                 ict_list.append(max(0, parent.finish_time - t + ict))
                 # ict_list.append(ict)
             # else:
