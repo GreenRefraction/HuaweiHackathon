@@ -153,44 +153,9 @@ class State:
         new_state:State = None
         if type(action) == WaitForProcessorToFinishAction or type(action) == WaitForNewIncommingDAGAction:
             new_state = State(self.dag_list_sorted, deepcopy(self.processors), self.time_stamp + action.dt)
-            
-
-            new_state.processing_todoDAGs = list()
-            for p_id in range(len(new_state.processors)):
-                if new_state.processors[p_id].current_running_todoTask is not None:
-                    new_state.processors[p_id].current_running_todoTask.task = self.processors[p_id].current_running_todoTask.task
-                    new_state.processing_todoDAGs.append(new_state.processors[p_id].current_running_todoTask.todoDAG)
-                new_state.processors[p_id].answers = set()
-                for answer in self.processors[p_id].answers:
-                    new_state.processors[p_id].answers.add(copy(answer))
-                new_state.processors[p_id].cache = copy(self.processors[p_id].cache)
-                new_state.processors[p_id].step(new_state.time_stamp)
-            for todoDAG in new_state.processing_todoDAGs:
-                for todoTask in todoDAG.todo_list:
-                    if todoTask.is_complete and todoTask.task in list(map(lambda todo: todo.task, new_state.buffering_todoTasks)):
-                        new_state.pop_todoTask(todoTask, todoTask.prefered_processor)
-            new_state.check_for_arriving_dags()
-            new_state.available_actions = None
-            new_state.explore_available_actions()
-            new_state.parent = self
 
         elif type(action) == ScheduleTaskAction:
             action:ScheduleTaskAction = action
-            new_state = State(self.dag_list_sorted, deepcopy(self.processors), self.time_stamp)
-            new_state.buffering_todoTasks = list()
-            for todo in self.buffering_todoTasks:
-                new_state.buffering_todoTasks.append(copy(todo))
-
-            for p_id in range(len(new_state.processors)):
-                new_state.processors[p_id].current_running_todoTask = copy(self.processors[p_id].current_running_todoTask)
-                new_state.processors[p_id].answers = self.processors[p_id].answers.copy()
-                new_state.processors[p_id].cache = self.processors[p_id].cache.copy()
-            #new_state.check_for_arriving_dags()
-            new_state.available_actions = None
-            new_state.processors[action.processor_id].start(action.todo_task, new_state.time_stamp)
-            new_state.pop_todoTask(action.todo_task, action.processor_id)
-            new_state.explore_available_actions()
-            new_state.parent = self
             
             #new_state.pop_task_from_list(action.task, action.processor_id)
         else:
