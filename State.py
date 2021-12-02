@@ -138,6 +138,7 @@ class State:
             for processor in new_state.processors:
                 processor.step(new_state.time_stamp)
             new_state.available_actions = None
+            new_state.check_for_arriving_dags()
             new_state.explore_available_actions()
 
         elif type(action) == ScheduleTaskAction:
@@ -152,9 +153,6 @@ class State:
         else:
             # Default, dunno what to do here
             raise Exception("ABORT")
-       
-        # keep the upcomming_tasks list up to date
-        new_state.check_for_arriving_dags()
 
         # this list contains dags that can be removed from
         dags_to_remove: list[DAG] = list()
@@ -182,7 +180,7 @@ class State:
         # Now we want to check if new_state is a terminal state and if
         # it is then set new_state.make_span = calc_make_span(new_state)
 
-        if len(self.processing_dags) == 0 and len(self.incomming_dags) == 0:
+        if len(new_state.incomming_dags) == 0 and len(new_state.buffering_tasks) == 0 and len(new_state.available_actions) == 0:
             new_state.make_span = calc_make_span(new_state.processors)
             new_state.is_terminal = True
         return new_state
@@ -201,6 +199,15 @@ class State:
             f"{str(id_list)}\n"+\
             f"{str(task_list)}\n"+\
             f"Actions:{action_list}"
+
+def calc_make_span(processor_list: list[Processor]):
+    T_max = 0
+    for processor in processor_list:
+        last_finish_time = 0
+        if len(processor.execution_history) != 0:
+            last_finish_time = processor.execution_history[-1][2]
+        T_max = max(last_finish_time, T_max)
+    return T_max
 
 
 def state_heuristic(state:State, action:Action):

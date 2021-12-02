@@ -234,11 +234,16 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
 
 
 def dfs_search(root:State, min_make_span) -> State:
-    if root.is_terminal:
-        return root
     print('-'*40)
+    if root.is_terminal:
+        print(root)
+        print(root.make_span)
+        print("TERMINAL")
+        input()
+        return root
     print(root)
-    
+    print(root_state.is_terminal)
+    input()
     # If the root is not terminal then continue searching
     min_child = None
     for action in root.available_actions:
@@ -258,7 +263,7 @@ if __name__ == '__main__':
     
     #root_state.explore_new_children()
     
-    print('-'*40)
+    """print('-'*40)
     print(root_state)
     print("available actions", len(root_state.available_actions))
     print("buffer size:", len(root_state.buffering_tasks))
@@ -311,7 +316,7 @@ if __name__ == '__main__':
     print(action000000)
     child000000 = child00000.take_action(action000000)
     print(child000000)
-    print(child000000.buffering_tasks[0].name)
+    print(child000000.buffering_tasks[0].name)"""
 
     terminal_state = dfs_search(root_state, 1e100)
     quit()
