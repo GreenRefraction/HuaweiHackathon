@@ -31,18 +31,13 @@ class NoArrivingDAGsException(Exception):
     pass
 
 class WaitForNewIncommingDAGAction(Action):
-    def __init__(self, incomming_dags:list[DAG], time_stamp:int) -> None:
-
-        self.soonest_arrival_time = 1e100
-        for dag in incomming_dags:
-            self.soonest_arrival_time = min(self.soonest_arrival_time, dag.arrival_time)
-        if len(incomming_dags) == 0:
-            raise NoArrivingDAGsException()
-        dt = self.soonest_arrival_time - time_stamp
+    def __init__(self, next_arrival_time, time_stamp:int) -> None:
+        self.next_arrival_time = next_arrival_time
+        dt = self.next_arrival_time - time_stamp
         super(WaitForNewIncommingDAGAction, self).__init__(dt)
 
     def __str__(self) -> str:
-        return f"Wait until {self.soonest_arrival_time}"
+        return f"Wait until {self.next_arrival_time}"
 
 
 class FailedToScheduleException(Exception):
@@ -53,7 +48,7 @@ class State:
     # it tells you which processors are running what task and which 
     # tasks are in the buffer. Assume that the constructor is only called once
     # and its for the root node. otherwise when creating children we utilize deepcopy
-    def __init__(self, dag_list_sorted:list[DAG], processor_list:list[Processor], time_stamp) -> None:
+    def __init__(self, dag_list:list[DAG], processor_list:list[Processor], time_stamp) -> None:
         # A mapping of action to state along with a value of each action
         self.children: dict[Action, State] = dict()
         self.action_value: dict[Action, float] = dict()
@@ -63,7 +58,7 @@ class State:
         self.time_stamp = time_stamp
         # A list of buffering DAGs
         self.processing_dags: list[DAG] = list()
-        self.incomming_dags: list[DAG] = dag_list_sorted
+        self.incomming_dags: list[DAG] = sorted(dag_list, key=lambda d: d.arrival_time)
         # A list of buffering Tasks
         self.buffering_tasks: list[Task] = list()
         self.check_for_arriving_dags()
@@ -100,17 +95,32 @@ class State:
                     schedule_task_action = ScheduleTaskAction(todo_task, processor.id, self.time_stamp)
                     self.available_actions.append(schedule_task_action)
 
-        # With all the running processors we can evaluate all actions
-        # of type WaitForProcessorAction
+        # With all the running processors we can evaluate the action of waiting for the first processor to finish
+        # there should only be one of these
+        min_finish_time = None
+        soonest_available_processor = None
         for processor in running_processors:
-            wait_for_processor_action = WaitForProcessorToFinishAction(processor, self.time_stamp)
-            self.available_actions.append(wait_for_processor_action)
-
-        # Now calculate all the actions of type WaitForNewIncommingDAGAction
+            if min_finish_time is None:
+                min_finish_time = processor.finish_time_of_running_task
+            elif processor.finish_time_of_running_task < min_finish_time:
+                min_finish_time = min(min_finish_time, processor.finish_time_of_running_task)
+            soonest_available_processor = processor
+        
+        # Now calculate all the WaitForNewIncommingDAGAction, there should only be one
+        next_arrival_time = None
         if len(self.incomming_dags) !=  0:
-            wait_for_dag_action = WaitForNewIncommingDAGAction(self.incomming_dags, self.time_stamp)
-            if wait_for_dag_action.dt > 0 and len(self.available_actions) == 0:
-                self.available_actions.append(wait_for_dag_action)
+            next_arrival_time = self.incomming_dags[0].arrival_time
+        
+        if next_arrival_time is not None and min_finish_time is not None:
+            wait_action = Action(min(next_arrival_time, min_finish_time) - self.time_stamp)    
+            self.available_actions.append(wait_action)
+        elif next_arrival_time is not None:
+            wait_action = Action(next_arrival_time - self.time_stamp)    
+            self.available_actions.append(wait_action)
+        elif min_finish_time is not None:
+            wait_action = Action(min_finish_time - self.time_stamp)    
+            self.available_actions.append(wait_action)
+
 
     def check_for_arriving_dags(self) -> None:
         while len(self.incomming_dags) != 0 and self.incomming_dags[0].arrival_time <= self.time_stamp:
@@ -133,7 +143,7 @@ class State:
     def take_action(self, action:Action):
         # Return a new child from self by taking the Action; action
         new_state:State = None
-        if type(action) == WaitForProcessorToFinishAction or type(action) == WaitForNewIncommingDAGAction:
+        if type(action) == WaitForProcessorToFinishAction or type(action) == WaitForNewIncommingDAGAction or type(action) == Action:
             new_state = deepcopy(self)
             new_state.time_stamp += action.dt
             for processor in new_state.processors:
@@ -168,16 +178,6 @@ class State:
         # to process a dag before the next instance of itself arrives
         for dag in new_state.processing_dags:
             if dag.deadline < self.time_stamp:
-                """print("Failed")
-                # print(dag)
-                print(new_state.time_stamp)
-                not_comp = list(
-                    filter(lambda t: not t.is_complete, dag.task_list))
-                print(len(not_comp))
-                print("parents", sum([len(t.parents) for t in not_comp]))
-                print("children", sum([len(t.children) for t in not_comp]))
-                dag._failed = True
-                raise FailedToScheduleException()"""
                 new_state.make_span = 1e100
                 new_state.is_terminal = True
                 new_state.is_failed = True

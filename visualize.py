@@ -34,8 +34,8 @@ def load_csv(filename):
 if __name__ == '__main__':
     filename = "output_sample.csv"
 
-    processor_list, dag_list, env = Debug.main(
-        "testcases/test11.json", "answer11.csv", 6)
+    processor_list, dag_list = Debug.main2(
+        "testcases/test1.json", "MDPanswer1.csv", 6)
     makespan = Debug.calc_make_span(processor_list)
     n_cores = len(processor_list)
     schedule = []
@@ -51,6 +51,7 @@ if __name__ == '__main__':
             failing_dag_idx = i
 
     n_dags = len(dag_types)
+    print(n_dags)
     type_color_map = plt.cm.get_cmap("hsv", n_dags)
     id_color_map = plt.cm.get_cmap("hsv", len(dag_list))
     print(type_color_map(0))
@@ -116,7 +117,8 @@ if __name__ == '__main__':
                  color=deadline_line_color, linewidth=2)
         plt.plot([dag.arrival_time, dag.arrival_time], [-10, ymax+10],
                  color=deadline_line_color, linewidth=2)
-
+    plt.show()
+    quit()
     for time_stamp in env.time_stamp_history:
         continue
         plt.plot([time_stamp, time_stamp], [-20, ymax+20],

@@ -147,7 +147,8 @@ def worst_case(dag_list: list[DAG]):
     for dag in dag_list:
         for task in dag.task_list:
             sum += task.EET
-            for _, ict in task.children:
+            for child in task.children:
+                ict = task.ict_to_children[child.name]
                 sum += ict
     return sum
 
@@ -176,24 +177,6 @@ def calc_std_deviation(processor_list: list[Processor], end_time):
 
     return math.sqrt(s)
 
-def sdf_scheduler(processor_list: list[Processor], upcomming_tasks: list[Task], t):
-    has_scheduled = False
-    upcomming_tasks.sort(
-        key=lambda task: task.dag.deadline)
-    # upcomming_tasks.sort(key=heuristic(todo))
-
-    # Start any task that is available
-    for p_id, processor in enumerate(processor_list):
-        # try to schedule the first task
-        for todo in upcomming_tasks:
-            success = processor.start(todo, t)
-            if success:
-                has_scheduled = success
-                # print(t, p_id, to_sched.task.name)
-                pop_task_from_list(todo, upcomming_tasks, t, p_id)
-                break
-    return has_scheduled
-
 def sdf_scheduler2(current_state:State):
     available_schedule_actions:list[ScheduleTaskAction] = list(filter(lambda a: type(a) == ScheduleTaskAction, current_state.available_actions))
     if len(available_schedule_actions) == 0:
@@ -219,8 +202,6 @@ def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_tim
         spamwriter.writerow([std_dev])
         spamwriter.writerow([utility_func(makespan, worst_case_val, std_dev)])
         spamwriter.writerow([int(elapsed_time)])
-
-
 
 def main(input_filename: str, output_filename: str, n_processors: int = 8):
     dag_list: list[DAG] = load_from_json(input_filename)
@@ -289,6 +270,7 @@ def iterative_search(root:State):
         if new_state.is_terminal:
             if current.is_failed:
                 # we want to go back one step in the stack
+                print("failed the task!")
                 stack.pop()
             else:
                 # We can just break the loop and return this state
@@ -296,11 +278,36 @@ def iterative_search(root:State):
                 break        
     return terminal_state
 
+def main2(input_filename: str, output_filename: str, n_processors: int=8):
+    dag_list: list[DAG] = load_from_json(input_filename)[:5]
+    # something that keeps track of what we've done
+    # initialze a empty schedule, the history
+    # schedule = Schedule()
+
+    # Initialize the environment
+    processor_list = [Processor(i) for i in range(n_processors)]
+    root_state = State(dag_list, processor_list, 0)
+
+
+    start_time = time.time_ns()
+    terminal_state = iterative_search(root_state)
+    stop_time = time.time_ns()
+    # CHECK? rounding error?
+    exec_time_scheduler = (stop_time - start_time)//1e6
+    print("Execution time:", exec_time_scheduler)
+    output_csv(terminal_state.processors, dag_list,
+                exec_time_scheduler, output_filename)
+
+    return terminal_state.processors, dag_list
+
 if __name__ == '__main__':
-    dag_list = load_from_json("testcases/test1.json")
-    dag_list = sorted(dag_list, key=lambda d: d.arrival_time)[:3]
+    processors, dag_list = main2("testcases/test1.json", "MDPanswer.csv")
+
+    quit()
+
+
+    dag_list = load_from_json("testcases/test1.json")[:3]
     processor_list = [Processor(i) for i in range(8)]
-    
     root_state = State(dag_list, processor_list, 0)
     start_time = time.time_ns()
     terminal_state = iterative_search(root_state)
