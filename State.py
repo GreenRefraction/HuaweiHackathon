@@ -142,6 +142,8 @@ class State:
 
     def take_action(self, action:Action):
         # Return a new child from self by taking the Action; action
+        # currently I'm utilizing deepcopy in order to make the program work
+        # but this is suuuuuuper memory inefficient and slow, this is close to a god function too.
         new_state:State = None
         if type(action) == WaitForProcessorToFinishAction or type(action) == WaitForNewIncommingDAGAction or type(action) == Action:
             new_state = deepcopy(self)
