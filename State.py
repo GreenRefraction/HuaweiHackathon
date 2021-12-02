@@ -76,7 +76,8 @@ class State:
         # make_span is the true value, the accompanied boolean indicates that its
         # a terminal state
         self.make_span = None
-        self.is_terminal = False
+        self.is_terminal:bool = False
+        self.is_failed:bool = False
         # heuristic is a value which tells you how valuable it is to be in 
         # this state
         self.heuristic = None
@@ -167,7 +168,7 @@ class State:
         # to process a dag before the next instance of itself arrives
         for dag in new_state.processing_dags:
             if dag.deadline < self.time_stamp:
-                print("Failed")
+                """print("Failed")
                 # print(dag)
                 print(new_state.time_stamp)
                 not_comp = list(
@@ -176,7 +177,10 @@ class State:
                 print("parents", sum([len(t.parents) for t in not_comp]))
                 print("children", sum([len(t.children) for t in not_comp]))
                 dag._failed = True
-                raise FailedToScheduleException()
+                raise FailedToScheduleException()"""
+                new_state.make_span = 1e100
+                new_state.is_terminal = True
+                new_state.is_failed = True
         # Now we want to check if new_state is a terminal state and if
         # it is then set new_state.make_span = calc_make_span(new_state)
 

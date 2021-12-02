@@ -8,7 +8,7 @@ from DAG import DAG
 from Task import Task
 from Processor import Processor
 from Environment import Environment
-from State import State
+from State import State, WaitForNewIncommingDAGAction, ScheduleTaskAction, WaitForProcessorToFinishAction
 
 
 class FailedToScheduleException(Exception):
@@ -176,6 +176,30 @@ def calc_std_deviation(processor_list: list[Processor], end_time):
 
     return math.sqrt(s)
 
+def sdf_scheduler(processor_list: list[Processor], upcomming_tasks: list[Task], t):
+    has_scheduled = False
+    upcomming_tasks.sort(
+        key=lambda task: task.dag.deadline)
+    # upcomming_tasks.sort(key=heuristic(todo))
+
+    # Start any task that is available
+    for p_id, processor in enumerate(processor_list):
+        # try to schedule the first task
+        for todo in upcomming_tasks:
+            success = processor.start(todo, t)
+            if success:
+                has_scheduled = success
+                # print(t, p_id, to_sched.task.name)
+                pop_task_from_list(todo, upcomming_tasks, t, p_id)
+                break
+    return has_scheduled
+
+def sdf_scheduler2(current_state:State):
+    available_schedule_actions:list[ScheduleTaskAction] = list(filter(lambda a: type(a) == ScheduleTaskAction, current_state.available_actions))
+    if len(available_schedule_actions) == 0:
+        return current_state.available_actions[0]
+    available_schedule_actions.sort(key=lambda a: a.task.dag_deadline)
+    return available_schedule_actions[0]
 
 def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_time, filename):
     std_dev = None
@@ -233,89 +257,56 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
     return processor_list, dag_list, env
 
 
-def dfs_search(root:State, current_best_child:State) -> State:
+def dfs_search(root:State, current_best_child:State=None) -> State:
     if root.is_terminal:
-        if current_best_child is None:
-            return root
-        elif root.make_span < current_best_child.make_span:
-            return root
-        else:
+        if root.is_failed:
             return current_best_child
+        else:
+            return root
     # If the root is not terminal then continue searching
     for action in root.available_actions:
         child = root.take_action(action)
         terminal_state = dfs_search(child, current_best_child)
+        if terminal_state.is_terminal and not terminal_state.is_failed:
+            return terminal_state
         if current_best_child is None:
             current_best_child = terminal_state
+            break
         elif terminal_state.make_span < current_best_child.make_span:
             current_best_child = terminal_state
     return current_best_child
 
+def iterative_search(root:State):
+    stack:list[State] = list()
+    stack.append(root)
+    terminal_state = None
+    while True:
+        current = stack[-1]
+        # our real time scheduler will determine what decision to be made
+        best_action = sdf_scheduler2(current)
+        new_state = current.take_action(best_action)
+        stack.append(new_state)
+        if new_state.is_terminal:
+            if current.is_failed:
+                # we want to go back one step in the stack
+                stack.pop()
+            else:
+                # We can just break the loop and return this state
+                terminal_state = new_state
+                break        
+    return terminal_state
+
 if __name__ == '__main__':
-    dag_list = load_from_json("sample.json")
-    dag_list = sorted(dag_list, key=lambda d: d.arrival_time)
-    processor_list = [Processor(i) for i in range(3)]
+    dag_list = load_from_json("testcases/test1.json")
+    dag_list = sorted(dag_list, key=lambda d: d.arrival_time)[:3]
+    processor_list = [Processor(i) for i in range(8)]
     
     root_state = State(dag_list, processor_list, 0)
-    
-    #root_state.explore_new_children()
-    
-    """print('-'*40)
-    print(root_state)
-    print("available actions", len(root_state.available_actions))
-    print("buffer size:", len(root_state.buffering_tasks))
-    print(list(map(lambda task: task.name, root_state.buffering_tasks)))
-    action0 = root_state.available_actions[2]
-    print('-'*40)
-    child0 = root_state.take_action(action0)
-    #child0.explore_new_children()
-    
-    print(child0)
-    print("available actions", len(child0.available_actions))
-    print("buffer size:", len(child0.buffering_tasks))
-    action00 = child0.available_actions[0]
-    print(action00)
-    print('-'*40)
-    print("child00")
-    
-    child00 = child0.take_action(action00)
-    print(child00)
-    #print(child00)
-    print("available actions", len(child00.available_actions))
-    for action in child00.available_actions:
-        print(action)
-    print("buffer size:", len(child00.buffering_tasks))
-    print(child00.buffering_tasks)
-    action000 = child00.available_actions[0]
-    print('-' * 40)
-    print(action000)
-    child000 = child00.take_action(action000)
-    print(child000)
-    for action in child000.available_actions:
-        print(action)
-
-    print('-'*40)
-    action0000 = child000.available_actions[0]
-    child0000 = child000.take_action(action0000)
-    print(child0000)
-    print(child0000.buffering_tasks)
-    
-    action00000 = child0000.available_actions[0]
-    print(action00000)
-    print('-'*40)
-    child00000 = child0000.take_action(action00000)
-    print(child00000)
-    print(child00000.buffering_tasks[0].name)
-
-    action000000 = child00000.available_actions[0]
-    
-    print('-'*40)
-    print(action000000)
-    child000000 = child00000.take_action(action000000)
-    print(child000000)
-    print(child000000.buffering_tasks[0].name)"""
-
-    terminal_state = dfs_search(root_state, None)
+    start_time = time.time_ns()
+    terminal_state = iterative_search(root_state)
+    elapsed_time = time.time_ns() - start_time
+    elapsed_time /= 1e6
+    print(terminal_state.make_span, elapsed_time)
     quit()
    
     testcases = [f"test{i}.json" for i in range(1, 13)]
