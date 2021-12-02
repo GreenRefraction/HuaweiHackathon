@@ -272,6 +272,9 @@ def iterative_search(root:State):
                 # we want to go back one step in the stack
                 print("failed the task!")
                 stack.pop()
+                # remove the action that lead to this terminal state from the State object
+                #
+                # ?????????????
             else:
                 # We can just break the loop and return this state
                 terminal_state = new_state

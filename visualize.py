@@ -26,8 +26,7 @@ def load_csv(filename):
                 task_start_time = int(event[1])/1000
                 task_finish_time = int(event[2])/1000
                 make_span = max(make_span, task_finish_time)
-                schedule[n_cores -
-                         1].append((task_id, task_start_time, task_finish_time))
+                schedule[n_cores - 1].append((task_id, task_start_time, task_finish_time))
     return schedule, make_span
 
 
@@ -35,7 +34,7 @@ if __name__ == '__main__':
     filename = "output_sample.csv"
 
     processor_list, dag_list = Debug.main2(
-        "testcases/test1.json", "MDPanswer1.csv", 6)
+        "testcases/test1.json", "MDPanswer1.csv", 8)
     makespan = Debug.calc_make_span(processor_list)
     n_cores = len(processor_list)
     schedule = []
