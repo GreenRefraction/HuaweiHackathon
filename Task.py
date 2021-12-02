@@ -22,7 +22,11 @@ class Task:
         # p_id ict finish_time
         self.dag_deadline: int = self.dag.deadline
         self.dag_period: int = self.dag.period
-
+        
+        self.min_start_time = None
+        self.finish_time = None
+        self.is_complete = False
+        self.prefered_processor = None
     # from the list of parents, find the max eet for this task
     # and that would be the starting time for this task.
 

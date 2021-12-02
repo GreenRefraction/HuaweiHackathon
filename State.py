@@ -1,5 +1,5 @@
-from DAG import DAG, TODODAG
-from Task import Task, TODOTask
+from DAG import DAG
+from Task import Task
 from Processor import Processor
 from copy import copy, deepcopy
 
@@ -17,15 +17,15 @@ class WaitForProcessorToFinishAction(Action):
         super(WaitForProcessorToFinishAction, self).__init__(dt)
     
     def __str__(self) -> str:
-        return f"Wait for processor: {self.processor.id} which finishes in {self.dt} with task {self.processor.current_running_todoTask.task.name}"
+        return f"Wait for processor: {self.processor.id} which finishes in {self.dt} with task {self.processor.current_running_task.name}"
 
 class ScheduleTaskAction(Action):
-    def __init__(self, todo_task:TODOTask, processor_id:int, time_stamp:int) -> None:
+    def __init__(self, task:Task, processor_id:int, time_stamp:int) -> None:
         self.processor_id = processor_id
-        self.todo_task:TODOTask = todo_task
+        self.task:Task = task
         super(ScheduleTaskAction, self).__init__(0)
     def __str__(self) -> str:
-        return f"Schedule task: {str(self.todo_task.task.name)} on processor: {self.processor_id}"
+        return f"Schedule task: {str(self.task.name)} on processor: {self.processor_id}"
 
 class NoArrivingDAGsException(Exception):
     pass
@@ -55,18 +55,17 @@ class State:
     # and its for the root node. otherwise when creating children we utilize deepcopy
     def __init__(self, dag_list_sorted:list[DAG], processor_list:list[Processor], time_stamp) -> None:
         # A mapping of action to state along with a value of each action
-        self.children: dict[Action, State] = None
+        self.children: dict[Action, State] = dict()
         self.action_value: dict[Action, float] = dict()
         self.parent: State = None
         
         # The time
         self.time_stamp = time_stamp
         # A list of buffering DAGs
-        self.dag_list_sorted = dag_list_sorted
-        self.processing_todoDAGs: list[TODODAG] = list()
-        self.incomming_todoDAGs: list[TODODAG] = [TODODAG(dag) for dag in dag_list_sorted]
+        self.processing_dags: list[DAG] = list()
+        self.incomming_dags: list[DAG] = dag_list_sorted
         # A list of buffering Tasks
-        self.buffering_todoTasks: list[TODOTask] = list()
+        self.buffering_tasks: list[Task] = list()
         self.check_for_arriving_dags()
 
         # A list of all available Actions
@@ -81,7 +80,7 @@ class State:
         # heuristic is a value which tells you how valuable it is to be in 
         # this state
         self.heuristic = None
-        #self.explore_available_actions()
+        self.explore_available_actions()
 
     def explore_available_actions(self):
         if self.available_actions is not None:
@@ -94,7 +93,7 @@ class State:
         # with idle_processors we can get a list of all actions of type ScheduleTaskAction
         self.available_actions: list[Action] = list()
         for processor in idle_processors:
-            for todo_task in self.buffering_todoTasks:
+            for todo_task in self.buffering_tasks:
                 can_start = processor.can_start(todo_task, self.time_stamp)
                 if can_start:
                     schedule_task_action = ScheduleTaskAction(todo_task, processor.id, self.time_stamp)
@@ -107,56 +106,48 @@ class State:
             self.available_actions.append(wait_for_processor_action)
 
         # Now calculate all the actions of type WaitForNewIncommingDAGAction
-        if len(self.incomming_todoDAGs) !=  0:
-            wait_for_dag_action = WaitForNewIncommingDAGAction(self.dag_list_sorted, self.time_stamp)
-            if wait_for_dag_action.dt > 0:
+        if len(self.incomming_dags) !=  0:
+            wait_for_dag_action = WaitForNewIncommingDAGAction(self.incomming_dags, self.time_stamp)
+            if wait_for_dag_action.dt > 0 and len(self.available_actions) == 0:
                 self.available_actions.append(wait_for_dag_action)
 
-    def explore_new_children(self):
-        if self.children is not None or self.is_terminal:
-            return
-        # This function adds all the available new states that we can transition
-        # to for every available action
-        self.children:dict[Action, State] = dict()
-        for action in self.available_actions:
-            #print(action)
-            new_state = self.take_action(action)
-            #print(new_state)
-            new_state.heuristic = state_heuristic(new_state, action)
-            self.children[action] = new_state
-
     def check_for_arriving_dags(self) -> None:
-        while len(self.incomming_todoDAGs) != 0 and self.incomming_todoDAGs[0].arrival_time <= self.time_stamp:
-            for arriving_todoTask in self.incomming_todoDAGs[0].entry_todo:
-                self.buffering_todoTasks.append(arriving_todoTask)
-            dag_to_process = self.incomming_todoDAGs.pop(0)
-            self.processing_todoDAGs.append(dag_to_process)
+        while len(self.incomming_dags) != 0 and self.incomming_dags[0].arrival_time <= self.time_stamp:
+            for arriving_todoTask in self.incomming_dags[0].entry_tasks:
+                self.buffering_tasks.append(arriving_todoTask)
+            dag_to_process = self.incomming_dags.pop(0)
+            self.processing_dags.append(dag_to_process)
 
-    def pop_todoTask(self, todoTask_to_remove: TODOTask, processor_id:int):
+    def pop_task(self, task_to_remove: Task, processor_id:int):
         # before we delete task_to_remove we want to append the children of that task to the upcomming tasks list
-        self.buffering_todoTasks = list(filter(lambda todo: todo.task.name != todoTask_to_remove.task.name, self.buffering_todoTasks))        
-        for child in todoTask_to_remove.children:
-            min_start_time = 1e100
-            is_ready = True
-            for parent in child.parents:
-                if parent.is_complete:
-                    min_start_time = min(min_start_time, parent.finish_time)
+        self.buffering_tasks = list(filter(lambda todo: todo != task_to_remove, self.buffering_tasks))
+        for child in task_to_remove.children:
+            if child not in self.buffering_tasks:
+                self.buffering_tasks.append(child)
+                if child.min_start_time is None:
+                    child.min_start_time = task_to_remove.finish_time
                 else:
-                    is_ready = False
-                    break
-            if is_ready is not None and is_ready:
-                child.min_start_time = min_start_time
-                self.buffering_todoTasks.append(child)
+                    child.min_start_time = min(child.min_start_time, task_to_remove.finish_time)
 
     def take_action(self, action:Action):
         # Return a new child from self by taking the Action; action
         new_state:State = None
         if type(action) == WaitForProcessorToFinishAction or type(action) == WaitForNewIncommingDAGAction:
-            new_state = State(self.dag_list_sorted, deepcopy(self.processors), self.time_stamp + action.dt)
+            new_state = deepcopy(self)
+            new_state.time_stamp += action.dt
+            for processor in new_state.processors:
+                processor.step(new_state.time_stamp)
+            new_state.available_actions = None
+            new_state.explore_available_actions()
 
         elif type(action) == ScheduleTaskAction:
             action:ScheduleTaskAction = action
-            
+            new_state = deepcopy(self)
+            task = filter(lambda t: t.name==action.task.name, new_state.buffering_tasks).__next__()
+            new_state.processors[action.processor_id].start(task, new_state.time_stamp)
+            new_state.pop_task(task, action.processor_id)
+            new_state.available_actions = None
+            new_state.explore_available_actions()
             #new_state.pop_task_from_list(action.task, action.processor_id)
         else:
             # Default, dunno what to do here
@@ -167,16 +158,16 @@ class State:
 
         # this list contains dags that can be removed from
         dags_to_remove: list[DAG] = list()
-        for dag in new_state.processing_todoDAGs:
+        for dag in new_state.processing_dags:
             if dag.is_complete:
                 dags_to_remove.append(dag)
         # remove the completed dags from the currently running dags
         for dag in dags_to_remove:
-            new_state.processing_todoDAGs.remove(dag)
+            new_state.processing_dags.remove(dag)
 
         # Now we want to check if we fail the problem, i.e we fail 
         # to process a dag before the next instance of itself arrives
-        for dag in new_state.processing_todoDAGs:
+        for dag in new_state.processing_dags:
             if dag.deadline < self.time_stamp:
                 print("Failed")
                 # print(dag)
@@ -191,7 +182,7 @@ class State:
         # Now we want to check if new_state is a terminal state and if
         # it is then set new_state.make_span = calc_make_span(new_state)
 
-        if len(self.processing_todoDAGs) == 0 and len(self.incomming_todoDAGs) == 0:
+        if len(self.processing_dags) == 0 and len(self.incomming_dags) == 0:
             new_state.make_span = calc_make_span(new_state.processors)
             new_state.is_terminal = True
         return new_state
@@ -202,7 +193,7 @@ class State:
         for processor in self.processors:
             if not processor.is_idle:
                 id_list.append(processor.id)
-                task_list.append(processor.current_running_todoTask.task.name)
+                task_list.append(processor.current_running_task.name)
         action_list = []
         for action in self.available_actions:
             action_list.append(str(action))
@@ -216,7 +207,7 @@ def state_heuristic(state:State, action:Action):
     """Evaluates a heuristic value of the state and the action which
     lead to that state"""
     soonest_deadline = 1e100
-    for dag in state.processing_todoDAGs:
+    for dag in state.processing_dags:
         for task in dag.task_list:
             soonest_deadline = min(soonest_deadline, task.dag_deadline)
     return -soonest_deadline

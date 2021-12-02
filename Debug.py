@@ -4,8 +4,8 @@ import csv
 import math
 from copy import copy, deepcopy
 
-from DAG import DAG, TODODAG
-from Task import Task, TODOTask
+from DAG import DAG
+from Task import Task
 from Processor import Processor
 from Environment import Environment
 from State import State
@@ -253,17 +253,16 @@ if __name__ == '__main__':
     dag_list = load_from_json("sample.json")
     dag_list = sorted(dag_list, key=lambda d: d.arrival_time)
     processor_list = [Processor(i) for i in range(3)]
-    todoDAG_list = [TODODAG(dag) for dag in dag_list]
     
     root_state = State(dag_list, processor_list, 0)
-    root_state.explore_available_actions()
+    
     #root_state.explore_new_children()
     
     print('-'*40)
     print(root_state)
     print("available actions", len(root_state.available_actions))
-    print("buffer size:", len(root_state.buffering_todoTasks))
-    print(list(map(lambda task: task.task.name, root_state.buffering_todoTasks)))
+    print("buffer size:", len(root_state.buffering_tasks))
+    print(list(map(lambda task: task.name, root_state.buffering_tasks)))
     action0 = root_state.available_actions[2]
     print('-'*40)
     child0 = root_state.take_action(action0)
@@ -271,45 +270,49 @@ if __name__ == '__main__':
     
     print(child0)
     print("available actions", len(child0.available_actions))
-    print("buffer size:", len(child0.buffering_todoTasks))
+    print("buffer size:", len(child0.buffering_tasks))
     action00 = child0.available_actions[0]
     print(action00)
     print('-'*40)
     print("child00")
+    
     child00 = child0.take_action(action00)
     print(child00)
     #print(child00)
     print("available actions", len(child00.available_actions))
     for action in child00.available_actions:
         print(action)
-    print("buffer size:", len(child00.buffering_todoTasks))
-    print(child00.buffering_todoTasks)
-
+    print("buffer size:", len(child00.buffering_tasks))
+    print(child00.buffering_tasks)
     action000 = child00.available_actions[0]
     print('-' * 40)
     print(action000)
-    print(action000.processor_id)
     child000 = child00.take_action(action000)
     print(child000)
     for action in child000.available_actions:
         print(action)
 
-
     print('-'*40)
     action0000 = child000.available_actions[0]
     child0000 = child000.take_action(action0000)
     print(child0000)
-    print(child0000.buffering_todoTasks)
-
+    print(child0000.buffering_tasks)
+    
     action00000 = child0000.available_actions[0]
     print(action00000)
     print('-'*40)
     child00000 = child0000.take_action(action00000)
     print(child00000)
-    print(child00000.buffering_todoTasks[0].task.name)
+    print(child00000.buffering_tasks[0].name)
+
+    action000000 = child00000.available_actions[0]
     
-    
-    quit()
+    print('-'*40)
+    print(action000000)
+    child000000 = child00000.take_action(action000000)
+    print(child000000)
+    print(child000000.buffering_tasks[0].name)
+
     terminal_state = dfs_search(root_state, 1e100)
     quit()
    
