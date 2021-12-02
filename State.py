@@ -134,20 +134,7 @@ class State:
 
     def pop_todoTask(self, todoTask_to_remove: TODOTask, processor_id:int):
         # before we delete task_to_remove we want to append the children of that task to the upcomming tasks list
-        """for child in todoTask_to_remove.children:
-            for upcomming_todo in self.buffering_todoTasks:
-                if upcomming_todo.task == child.task:
-                    print("Found")
-                    upcomming_todo.min_start_time = max(upcomming_todo.min_start_time,
-                                                        todoTask_to_remove.finish_time)
-                    upcomming_todo.pref_p.add((processor_id, ict, todoTask_to_remove.finish_time))
-                    break
-            else:
-                print("Not found")
-                child.min_start_time = todoTask_to_remove.finish_time
-                child.pref_p.add((processor_id, ict, todoTask_to_remove.finish_time))
-                self.buffering_todoTasks.append(child)"""
-        self.buffering_todoTasks = list(filter(lambda todo: todo.task != todoTask_to_remove.task, self.buffering_todoTasks))        
+        self.buffering_todoTasks = list(filter(lambda todo: todo.task.name != todoTask_to_remove.task.name, self.buffering_todoTasks))        
         for child in todoTask_to_remove.children:
             min_start_time = 1e100
             is_ready = True
@@ -160,13 +147,14 @@ class State:
             if is_ready is not None and is_ready:
                 child.min_start_time = min_start_time
                 self.buffering_todoTasks.append(child)
-        #self.buffering_todoTasks.remove(todoTask_to_remove)
 
     def take_action(self, action:Action):
         # Return a new child from self by taking the Action; action
         new_state:State = None
         if type(action) == WaitForProcessorToFinishAction or type(action) == WaitForNewIncommingDAGAction:
             new_state = State(self.dag_list_sorted, deepcopy(self.processors), self.time_stamp + action.dt)
+            
+
             new_state.processing_todoDAGs = list()
             for p_id in range(len(new_state.processors)):
                 if new_state.processors[p_id].current_running_todoTask is not None:
