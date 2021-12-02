@@ -233,26 +233,23 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
     return processor_list, dag_list, env
 
 
-def dfs_search(root:State, min_make_span) -> State:
-    print('-'*40)
+def dfs_search(root:State, current_best_child:State) -> State:
     if root.is_terminal:
-        print(root)
-        print(root.make_span)
-        print("TERMINAL")
-        input()
-        return root
-    print(root)
-    print(root_state.is_terminal)
-    input()
+        if current_best_child is None:
+            return root
+        elif root.make_span < current_best_child.make_span:
+            return root
+        else:
+            return current_best_child
     # If the root is not terminal then continue searching
-    min_child = None
     for action in root.available_actions:
         child = root.take_action(action)
-        terminal_state = dfs_search(child, min_make_span)
-        if terminal_state.make_span < min_make_span:
-            min_child = terminal_state
-            min_make_span = terminal_state.make_span
-    return min_child
+        terminal_state = dfs_search(child, current_best_child)
+        if current_best_child is None:
+            current_best_child = terminal_state
+        elif terminal_state.make_span < current_best_child.make_span:
+            current_best_child = terminal_state
+    return current_best_child
 
 if __name__ == '__main__':
     dag_list = load_from_json("sample.json")
@@ -318,7 +315,7 @@ if __name__ == '__main__':
     print(child000000)
     print(child000000.buffering_tasks[0].name)"""
 
-    terminal_state = dfs_search(root_state, 1e100)
+    terminal_state = dfs_search(root_state, None)
     quit()
    
     testcases = [f"test{i}.json" for i in range(1, 13)]
