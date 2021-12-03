@@ -467,12 +467,21 @@ def heuristic_scheduler(env:Environment, time):
         for p_id, proc in enumerate(env.processor_list):
             if upcomming_task._type in [cached_task._type for cached_task in proc.cache] and p_id in idle_processor_id_set:
                 cache_priority.add(p_id)
-
-        if upcomming_task.dag.child_depth < 4: # four is related to the cache size
-            success = prio_scheduling(upcomming_task, ict_priority, cache_priority, idle_processor_id_set, env, time)
+        
+        h1 = 0
+        for p_id, ict, ft in upcomming_task.pref_p:
+            h1 = max(h1, ft + ict - time)
+            
+        cache_hits = 0
+        time_save = int(upcomming_task.EET * 0.1)
+        for proc in idle_processors:
+            cache_hits += int(upcomming_task._type in [cached_task._type for cached_task in proc.cache])
+        if cache_hits > 0 and time_save > h1:
+        #if upcomming_task.dag.child_depth < 4: # four is related to the cache size
+            success = prio_scheduling(upcomming_task, cache_priority, ict_priority, idle_processor_id_set, env, time)
         else:
             # here we try schedule upcomming_task with priority cache then ict then rest
-            success = prio_scheduling(upcomming_task, cache_priority, ict_priority, idle_processor_id_set, env, time)
+            success = prio_scheduling(upcomming_task, ict_priority, cache_priority, idle_processor_id_set, env, time)
 
     return
 
@@ -527,6 +536,7 @@ def heuristic(task: Task, time: int, processor_list:list[Processor]):
         cache_hits += int(task._type in [cached_task._type for cached_task in proc.cache])
     h3 = 0
     if task.child_depth < 4:
+    # if cache_hits > 0:
         # now multiply time_save with the complement of cache_hits
         # giving high priority if there are only few cache hits
         h3 = time_save * (len(processor_list) - cache_hits)
