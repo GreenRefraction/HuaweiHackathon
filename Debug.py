@@ -6,6 +6,7 @@ import math
 # from Processor import Processor, TODO
 # from Environment import Environment
 
+COFS = (1.0, 1.0, 1.0, 1.0)
 
 class FailedToScheduleException(Exception):
     pass
@@ -330,14 +331,14 @@ class Environment:
 
         for dag in self.processing_dag_list:
             if dag.deadline < self.time_stamp:
-                print("Failed")
+                # print("Failed")
                 # print(dag)
-                print(self.time_stamp)
+                # print(self.time_stamp)
                 not_comp = list(
                     filter(lambda t: not t.is_complete, dag.task_list))
-                print(len(not_comp))
-                print("parents", sum([len(t.parents) for t in not_comp]))
-                print("children", sum([len(t.children) for t in not_comp]))
+                # print(len(not_comp))
+                # print("parents", sum([len(t.parents) for t in not_comp]))
+                # print("children", sum([len(t.children) for t in not_comp]))
                 dag._failed = True
                 raise FailedToScheduleException()
         # i.e we fail to process a dag before the next instance
@@ -525,7 +526,8 @@ def heuristic(task: Task, time: int, processor_list:list[Processor]):
     # giving high priority if there are only few cache hits
     # h3 = time_save # * (len(processor_list) - cache_hits)
 
-    h = h0 + h1 + h2 + h3
+    # h = 3*h0 + 2*h1 + h2 + 2*h3
+    h = COFS[0]*h0 + COFS[1]*h1 + COFS[2]*h2 + COFS[3]*h3
     return h
     # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
 
@@ -660,8 +662,8 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
     processor_list = [Processor(i) for i in range(n_processors)]
 
     env = Environment(dag_list, processor_list)
-    print("Final Deadline:", env.last_deadline)
-    print("Largest ICT", env.max_ict)
+    # print("Final Deadline:", env.last_deadline)
+    # print("Largest ICT", env.max_ict)
     try:
         start_time = time.time_ns()
         # Only works when the dags isn't repopulated
@@ -673,7 +675,7 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
         stop_time = time.time_ns()
         # CHECK? rounding error?
         exec_time_scheduler = (stop_time - start_time)//1e6
-        print("Execution time:", exec_time_scheduler)
+        # print("Execution time:", exec_time_scheduler)
         output_csv(processor_list, dag_list,
                    exec_time_scheduler, output_filename)
     except FailedToScheduleException:

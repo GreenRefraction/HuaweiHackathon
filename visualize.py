@@ -35,7 +35,7 @@ if __name__ == '__main__':
     filename = "output_sample.csv"
 
     processor_list, dag_list, env = Debug.main(
-        "testcases/test11.json", "answer11.csv", 6)
+        "testcases/test12.json", "answer12.csv", 6)
     makespan = Debug.calc_make_span(processor_list)
     n_cores = len(processor_list)
     schedule = []
@@ -111,14 +111,18 @@ if __name__ == '__main__':
         deadline_line_color = 'black'
         if not dag._failed:
             continue
-        t = dag.arrival_time + dag.deadline
-        plt.plot([t, t], [-10, ymax+10],
+        plt.plot([dag.deadline, dag.deadline], [-10, ymax+10],
                  color=deadline_line_color, linewidth=2)
         plt.plot([dag.arrival_time, dag.arrival_time], [-10, ymax+10],
                  color=deadline_line_color, linewidth=2)
+        print(dag.name)
 
     for time_stamp in env.time_stamp_history:
         continue
         plt.plot([time_stamp, time_stamp], [-20, ymax+20],
-                 color='black', linestyle='dashed', alpha=0.5)
+                 color='black', linestyle='dashed', alpha=0.2)
+
+    plt.plot([env.time_stamp, env.time_stamp], [-20, ymax+20],
+             color='red', linestyle='dashed', alpha=1)
+
     plt.show()
