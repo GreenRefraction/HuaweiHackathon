@@ -2,8 +2,10 @@ import json
 import time
 import csv
 import math
+import random
 from copy import copy, deepcopy
 from types import new_class
+
 
 # from DAG import DAG
 # from Processor import Processor, TODO
@@ -17,9 +19,14 @@ class FailedToScheduleException(Exception):
 class Task:
     def __init__(self, name, dag, json_task_data: dict) -> None:
         self.name = name
+        self.id = int(name[4:])
         self.EET = json_task_data['EET']
         self._type = json_task_data['Type']
-
+        if 'sharedResources' in json_task_data.keys():
+            self.shared_resources: set[int] = set(json_task_data['sharedResources'].values())
+        else:
+            self.shared_resources = set()
+        #print(self.shared_resources)
         self.children: list[(Task, int)] = list()
         self.parents: list[(Task, int)] = list()
         self.n_children:int = 0
@@ -157,6 +164,7 @@ class DAG:
 class Processor:
 
     current_running_task: Task = None
+    exluded_task_ids: list[int] = None
     is_idle: bool = None
     finish_time_of_running_task: int = None
     utilization_time: int = None
@@ -174,6 +182,7 @@ class Processor:
         self.id: int = id
         self.cache = list()
         self.utilization_time = 0
+        self.exluded_task_ids:list = list()
 
         self.answers = set()
         self.is_idle = True
@@ -203,9 +212,14 @@ class Processor:
         # and tick the dag
         self.current_running_task.dag.tick()
 
+        # remove shared resources
+        for task_id in self.current_running_task.shared_resources:
+            self.exluded_task_ids.remove(task_id)
+        
         self.current_running_task = None
         self.is_idle = True
         self.finish_time_of_running_task = None
+
 
     def can_start(self, task:Task, t) -> bool:
 
@@ -213,6 +227,8 @@ class Processor:
             return False
         # check if the parents of the task is finished
 
+        if task.id in self.exluded_task_ids:
+            return False
         # if todo.task.name == "Task5023":
         #     print("min start time 5023", todo.min_start_time)
 
@@ -248,6 +264,8 @@ class Processor:
         # (parentFinishTime + communicationTime * (processors of parent and child are different)
 
         self.current_running_task = task
+        for resource in task.shared_resources:
+            self.exluded_task_ids.append(resource)
         self.is_idle = False
 
         # if task has the same _type we can reduce the EET by 10%
@@ -348,10 +366,11 @@ class Environment:
                 print("children", sum([len(t.children) for t in not_comp]))
                 dag._failed = True
                 raise FailedToScheduleException()
+            
         # i.e we fail to process a dag before the next instance
         # of itself arrives
 
-        # print(self.time_stamp)
+        # print(sugugguguelf.time_stamp)
 
     def get_next_arrival_time(self) -> int:
         if len(self.dag_arrival) != 0:
@@ -480,7 +499,9 @@ def prio_scheduling(upcomming_task:Task, set1:set[int], set2:set[int], total_set
 
 def try_schedule_on(upcomming_task:Task, processor_set:set[Processor], time:int, env:Environment):
     success = False
-    for p_id in processor_set:
+    temp_processor_list = list(processor_set)
+    random.shuffle(temp_processor_list)
+    for p_id in temp_processor_list:
         success = env.processor_list[p_id].start(upcomming_task, time)
         if success:
             pop_task_from_list(upcomming_task, env.upcomming_tasks, time, p_id)
@@ -593,7 +614,10 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
     # schedule = Schedule()
 
     # Initialize the environment
+    shared_resources = list()
     processor_list = [Processor(i) for i in range(n_processors)]
+    for processor in processor_list:
+        processor.exluded_task_ids = shared_resources
 
     env = Environment(dag_list, processor_list)
     print("Final Deadline:", env.last_deadline)
@@ -618,43 +642,7 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
 
     return processor_list, dag_list, env
 
-def state_heuristic(state:State, action:Action):
-    """Evaluates a heuristic value of the state and the action which
-    lead to that state"""
-    soonest_deadline = 1e100
-
-    for dag in state.processing_dags:
-        for task in dag.task_list:
-            soonest_deadline = min(soonest_deadline, task.dag_deadline)
-    
-    return -soonest_deadline
-
-def dfs_search(root:State) -> State:
-    if root.is_terminal:
-        return root
-    print('-'*40)
-    print(root)
-    
-    # If the root is not terminal then continue searching
-    min_make_span = 1e100
-    min_child = None
-    root.explore_available_actions()
-    root.explore_new_children()
-    for action, child in root.children.items():
-        print(action)
-        child.explore_available_actions()
-        child.explore_new_children()
-        print("available actions", len(child.available_actions))
-        print(len(child.buffering_tasks))
-        input()
-        terminal_state = dfs_search(child)
-        if terminal_state.make_span < min_make_span:
-            min_child = terminal_state
-            min_make_span = terminal_state.make_span
-    return min_child
-
 if __name__ == '__main__':
-    
     """dag_list = load_from_json("sample.json")
     execution_history0 = [(0, 0, 10),(3, 43, 53),(1000, 60, 69),(1003, 99, 108)]
     execution_history1 = [(1, 11, 31), (1001, 70, 88)]
@@ -676,15 +664,17 @@ if __name__ == '__main__':
     print(pn_std)
     print(utility)
     quit()"""
-    testcases = [f"test{i}.json" for i in range(1, 13)]
+
+
+    testcases = [f"test{i}.json" for i in range(1, 10)]
 
 
     for i, test in enumerate(testcases):
         #if i != 11: continue
         print("-"*20)
-        processor_list, dag_list, _ = main("testcases/"+test,
+        processor_list, dag_list, _ = main("testsNEW/"+test,
                                            f"answer{i+1}.csv",
-                                           n_processors=8 if i < 6 else 6)
+                                           n_processors=8 if i < 4 else 6)
         make_span = calc_make_span(processor_list)
         print(f"Case {i+1}")
         # print([processor.utilization_time/make_span for processor in processor_list])

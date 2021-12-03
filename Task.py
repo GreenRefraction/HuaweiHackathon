@@ -8,7 +8,7 @@ class Task:
     _type = None
     children = None
     parents = None
-
+    shared_resources = None
     is_complete:bool = None
 
     def __init__(self, name, dag, json_task_data: dict) -> None:
@@ -18,6 +18,8 @@ class Task:
 
         self.children: list[(Task, int)] = list()
         self.parents: list[(Task, int)] = list()  # Needed?
+
+        self.shared_resources: set[int] = set(json_task_data['sharedResources'].values())
 
         self.is_complete:bool = False
         self.dag = dag
@@ -40,4 +42,4 @@ class Task:
         self.is_complete = True
 
     def __str__(self) -> str:
-        return json.dumps(str(self.__dict__), default=lambda o:o.name if type(o) == Task else str(o.__dict__))
+        return json.dumps(self.__dict__, indent=4, default=lambda o:o.name if type(o) == Task else str(o.__dict__))

@@ -76,6 +76,9 @@ class Processor:
         for (parent, ict) in todo.task.parents:
             if parent.is_complete != True:
                 return False
+        # check for mutual exclusion
+        
+        
         # First check the communication time
         ict_list:list[int] = []
         pay_the_fee:bool = False
