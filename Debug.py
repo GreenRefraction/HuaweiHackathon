@@ -3,6 +3,7 @@ import time
 import csv
 import math
 import random
+import pickle
 from copy import copy, deepcopy
 from types import new_class
 
@@ -50,6 +51,7 @@ class Task:
         self.dag_deadline: int = self.dag.deadline
         self.dag_period: int = self.dag.period
         self.max_ict = None
+        self.hit_cache = False
 
 
     # from the list of parents, find the max eet for this task
@@ -271,6 +273,7 @@ class Processor:
         # if task has the same _type we can reduce the EET by 10%
         eet = task.EET
         if task._type in [cached_task._type for cached_task in self.cache]:
+            task.hit_cache = True
             eet = int(eet * 0.9)  # CHECK? rounding error?
             # print(t, "new instance", eet, todo.task.dag_id)
 
@@ -282,7 +285,7 @@ class Processor:
         # call on the execution history
         task_id = int(task.name[4:])
         self.execution_history.append(
-            (task_id, task.finish_time - eet, task.finish_time))
+            (task_id, task.finish_time - eet, task.finish_time, task.hit_cache))
 
         # add the eet to utilization_time
         self.utilization_time += eet + ict if pay_the_fee else eet
@@ -356,21 +359,20 @@ class Environment:
 
         for dag in self.processing_dag_list:
             if dag.deadline < self.time_stamp:
-                print("Failed")
+                #print("Failed")
                 # print(dag)
-                print(self.time_stamp)
+                #print(self.time_stamp)
                 not_comp = list(
                     filter(lambda t: not t.is_complete, dag.task_list))
-                print(len(not_comp))
-                print("parents", sum([len(t.parents) for t in not_comp]))
-                print("children", sum([len(t.children) for t in not_comp]))
+                #print(len(not_comp))
+                #print("parents", sum([len(t.parents) for t in not_comp]))
+                #print("children", sum([len(t.children) for t in not_comp]))
                 dag._failed = True
-                raise FailedToScheduleException()
-            
-        # i.e we fail to process a dag before the next instance
-        # of itself arrives
+                return False
+                # now we want to return to the last pickled state stored in the list
 
-        # print(sugugguguelf.time_stamp)
+                # raise FailedToScheduleException()
+        return True
 
     def get_next_arrival_time(self) -> int:
         if len(self.dag_arrival) != 0:
@@ -437,14 +439,19 @@ def load_from_json(file_name) -> list[DAG]:
 # - We if we have finished a task, we want to prioritize its children with the largest ict
 # - We want to utilize caching for tasks with large EET, i.e, same type of tasks should be scheduled on the same core within 4 scheduled tasks
 
-def heuristic_scheduler(env:Environment, time):
+def heuristic_scheduler(env:Environment, time, pickled_envs:list=None):
     idle_processors = list(filter(lambda proc: proc.is_idle, env.processor_list))
     if len(idle_processors) == 0:
         return 
     idle_processor_id_set = set([proc.id for proc in idle_processors])
     env.upcomming_tasks.sort(key=lambda task: heuristic(task, time, idle_processors), reverse=True)
-    # print([t.task.name for t in upcomming_tasks])
-    # print("Is p idle?", [p.is_idle for p in processor_list])
+    heu_list = [heuristic(task, time, idle_processors) for task in env.upcomming_tasks]
+    if len(env.upcomming_tasks) != 0 and heu_list.count(heu_list[0]) > 1:
+        # pickle env and 
+        # pickled_envs.append(pickle.dump(env))
+        env.task_hierarchy = env.upcomming_tasks.copy()
+        pickled_envs.append(pickle.dumps(env))
+        pass
 
     for upcomming_task in env.upcomming_tasks.copy():
         # here we only continue if atleast one processor is available
@@ -606,7 +613,7 @@ def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_tim
         for processor in processor_list:
             p_count += 1
             # spamwriter.writerow([p_count, processor.execution_history])
-            spamwriter.writerow([" ".join([str(e) for e in entry])
+            spamwriter.writerow([" ".join([str(e) for e in entry[:3]])
                                  for entry in processor.execution_history])
             std_dev = calc_std_deviation(processor_list, makespan)
         worst_case_val = worst_case(dag_list)
@@ -628,7 +635,7 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
     processor_list = [Processor(i) for i in range(n_processors)]
     for processor in processor_list:
         processor.exluded_task_ids = shared_resources
-
+    pickled_envs = []
     env = Environment(dag_list, processor_list)
     print("Final Deadline:", env.last_deadline)
     print("Largest ICT", env.max_ict)
@@ -638,8 +645,15 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
         while len(env.dag_arrival) > 0 or len(env.upcomming_tasks) != 0:
             # print("-"*30)
             # print("Env time stamp", env.time_stamp)
-            heuristic_scheduler(env, env.time_stamp)
-            env.step()
+            heuristic_scheduler(env, env.time_stamp, pickled_envs)
+            # if env.step failed
+                # reload the last pickled state
+            success = env.step()
+            if not success and len(pickled_envs) > 0:
+                pickle.loads(pickled_envs[-1])
+            elif not success:
+                raise FailedToScheduleException()
+
         stop_time = time.time_ns()
         # CHECK? rounding error?
         exec_time_scheduler = (stop_time - start_time)//1e6
@@ -674,7 +688,7 @@ if __name__ == '__main__':
     print(pn_std)
     print(utility)
     quit()"""
-
+    
 
     testcases = [f"test{i}.json" for i in range(1, 10)]
 
