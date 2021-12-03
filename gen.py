@@ -30,9 +30,13 @@ if __name__ == "__main__":
                           bace[2] + c2,
                           bace[3] + c3)
             processor_list, dag_list, env = Debug.main(
-                "testcases/test11.json", "answer11.csv", 6)
+                "testcases/test12.json", "answer12.csv", 6)
             res.append(env.time_stamp)
             prog.append(env.time_stamp / env.last_deadline)
+            processor_list, dag_list, env = Debug.main(
+                "testcases/test12.json", "answer12.csv", 6)
+            res[-1] += (env.time_stamp)
+            prog[-1] += (env.time_stamp / env.last_deadline)
 
             print(f"\r{i}", end="")
         print()
