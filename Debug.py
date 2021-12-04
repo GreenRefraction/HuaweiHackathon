@@ -455,10 +455,16 @@ def heuristic_scheduler(env:Environment, time):
             return 
         # print("trying task", todo.task.name)
         success = False
+
+        wait_for_cache_hit = False
+        for processor in filter(lambda p: upcomming_task in p.cache and not p.is_idle, env.processor_list):
+            if upcomming_task.EET * 0.1 > processor.current_running_task.finish_time:
+                wait_for_cache_hit = True
+        if wait_for_cache_hit: continue
         
         # Here we create a set of processor ids which should be prioritized according to the tasks
         # largest ict
-        p_priority = sorted(list(upcomming_task.pref_p),key=lambda t: t[2] + t[1] - time, reverse=True)
+        p_priority = sorted(list(upcomming_task.pref_p), key=lambda t: t[2] + t[1] - time, reverse=True)
         ict_priority = set([p_id for p_id, _, _ in p_priority]).intersection(idle_processor_id_set)
 
         # Here we create a set of processor ids which should be prioritized according to the tasks
