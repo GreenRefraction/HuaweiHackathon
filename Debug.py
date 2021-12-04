@@ -176,7 +176,7 @@ class Processor:
     # idk what to call this
     answers: set[Task] = None
     # some sort of history of what tasks that were scheduled
-    execution_history: list[tuple[int, int, int]] = None
+    execution_history: list[tuple[int, int, int, bool]] = None
 
     def __init__(self, id: int) -> None:
         self.id: int = id
@@ -269,8 +269,10 @@ class Processor:
         self.is_idle = False
 
         # if task has the same _type we can reduce the EET by 10%
+        is_cached = False
         eet = task.EET
         if task._type in [cached_task._type for cached_task in self.cache]:
+            is_cached = True
             eet = int(eet * 0.9)  # CHECK? rounding error?
             # print(t, "new instance", eet, todo.task.dag_id)
 
@@ -282,7 +284,7 @@ class Processor:
         # call on the execution history
         task_id = int(task.name[4:])
         self.execution_history.append(
-            (task_id, task.finish_time - eet, task.finish_time))
+            (task_id, task.finish_time - eet, task.finish_time, is_cached))
 
         # add the eet to utilization_time
         self.utilization_time += eet + ict if pay_the_fee else eet
@@ -604,7 +606,7 @@ def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_tim
         for processor in processor_list:
             p_count += 1
             # spamwriter.writerow([p_count, processor.execution_history])
-            spamwriter.writerow([" ".join([str(e) for e in entry])
+            spamwriter.writerow([" ".join([str(e) for e in entry[:3]])
                                  for entry in processor.execution_history])
             std_dev = calc_std_deviation(processor_list, makespan)
         worst_case_val = worst_case(dag_list)

@@ -84,7 +84,7 @@ if __name__ == '__main__':
     # Setting graph attribute
     # gnt.grid(True)
     for p_id, processor_execution_history in enumerate(schedule):
-        for task_index, (task_id, task_start_time, task_finish_time) in enumerate(processor_execution_history):
+        for task_index, (task_id, task_start_time, task_finish_time, task_is_cached) in enumerate(processor_execution_history):
             eet = task_finish_time - task_start_time
             dag = dag_list[index_to_norm_id[p_id][task_index]]
             ec = id_color_map(index_to_norm_id[p_id][task_index])
@@ -96,7 +96,7 @@ if __name__ == '__main__':
                             facecolor=fc, edgecolor=ec, linewidth=1)
             x_c = task_start_time + eet/4
             y_c = p_id*dy + dy/2
-            gnt.text(x_c, y_c, str(task_id))
+            gnt.text(x_c, y_c, str(task_id), color='white' if task_is_cached else 'black')
 
     for i, dag in enumerate(dag_list):
         # deadline_line_color = id_color_map(i)
