@@ -34,8 +34,14 @@ def load_csv(filename):
 if __name__ == '__main__':
     filename = "output_sample.csv"
 
+    test_id = 8
+    cpus = 6
+    if len(sys.argv) > 1:
+        test_id = int(sys.argv[1])
+        cpus = 8 if test_id < 4 else 6
+
     processor_list, dag_list, env = Debug.main(
-        "testsNEW/test8.json", "answer8.csv", 6)
+            f"testsNEW/test{test_id}.json", f"answer{test_id}.csv", cpus)
     makespan = Debug.calc_make_span(processor_list)
     n_cores = len(processor_list)
     schedule = []
