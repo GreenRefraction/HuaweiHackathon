@@ -35,7 +35,7 @@ if __name__ == '__main__':
     filename = "output_sample.csv"
 
     processor_list, dag_list, env = Debug.main(
-        "testsNew/test8.json", "answer8.csv", 6)
+        "testsNEW/test8.json", "answer8.csv", 6)
     makespan = Debug.calc_make_span(processor_list)
     n_cores = len(processor_list)
     schedule = []
@@ -103,16 +103,14 @@ if __name__ == '__main__':
         deadline_line_color = type_color_map(dag._type)
         if dag._failed:
             continue
-        t = dag.arrival_time + dag.deadline
-        plt.plot([t, t], [-10, ymax+10],
+        plt.plot([dag.deadline, dag.deadline], [-10, ymax+10],
                  color=deadline_line_color, linewidth=2, alpha=0.3)
 
     for i, dag in enumerate(dag_list):
         deadline_line_color = 'black'
         if not dag._failed:
             continue
-        t = dag.arrival_time + dag.deadline
-        plt.plot([t, t], [-10, ymax+10],
+        plt.plot([dag.deadline, dag.deadline], [-10, ymax+10],
                  color=deadline_line_color, linewidth=2)
         plt.plot([dag.arrival_time, dag.arrival_time], [-10, ymax+10],
                  color=deadline_line_color, linewidth=2)

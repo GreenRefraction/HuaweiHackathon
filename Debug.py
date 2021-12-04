@@ -468,11 +468,12 @@ def heuristic_scheduler(env:Environment, time):
             if upcomming_task._type in [cached_task._type for cached_task in proc.cache] and p_id in idle_processor_id_set:
                 cache_priority.add(p_id)
 
-        if upcomming_task.dag.child_depth < 4: # four is related to the cache size
-            success = prio_scheduling(upcomming_task, ict_priority, cache_priority, idle_processor_id_set, env, time)
-        else:
-            # here we try schedule upcomming_task with priority cache then ict then rest
-            success = prio_scheduling(upcomming_task, cache_priority, ict_priority, idle_processor_id_set, env, time)
+        # if upcomming_task.dag.child_depth < 4: # four is related to the cache size
+        #     success = prio_scheduling(upcomming_task, ict_priority, cache_priority, idle_processor_id_set, env, time)
+        # else:
+        #     # here we try schedule upcomming_task with priority cache then ict then rest
+        #     success = prio_scheduling(upcomming_task, cache_priority, ict_priority, idle_processor_id_set, env, time)
+        success = prio_scheduling(upcomming_task, ict_priority, cache_priority, idle_processor_id_set, env, time)
 
     return
 
@@ -500,7 +501,7 @@ def prio_scheduling(upcomming_task:Task, set1:set[int], set2:set[int], total_set
 def try_schedule_on(upcomming_task:Task, processor_set:set[Processor], time:int, env:Environment):
     success = False
     temp_processor_list = list(processor_set)
-    random.shuffle(temp_processor_list)
+    # random.shuffle(temp_processor_list)
     for p_id in temp_processor_list:
         success = env.processor_list[p_id].start(upcomming_task, time)
         if success:
