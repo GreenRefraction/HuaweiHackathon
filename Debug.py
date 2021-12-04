@@ -5,11 +5,14 @@ import math
 import random
 from copy import copy, deepcopy
 from types import new_class
+import numpy as np
 
 
 # from DAG import DAG
 # from Processor import Processor, TODO
 # from Environment import Environment
+stride_counter = [0, 0]
+print(stride_counter)
 
 
 class FailedToScheduleException(Exception):
@@ -50,7 +53,7 @@ class Task:
         self.dag_deadline: int = self.dag.deadline
         self.dag_period: int = self.dag.period
         self.max_ict = None
-
+        self.heuristic = -math.inf
 
     # from the list of parents, find the max eet for this task
     # and that would be the starting time for this task.
@@ -149,6 +152,7 @@ class DAG:
             self.EET_depth = max(task.EET_depth, self.EET_depth)
             self.child_depth = max(task.child_depth, self.child_depth)
         self.task_list = list(name_to_task.values())
+        self.priority = 0
 
     def tick(self) -> None:
         """set is_complete to True if all of the tasks in this dag are complete"""
@@ -441,12 +445,16 @@ def load_from_json(file_name) -> list[DAG]:
 
 def heuristic_scheduler(env:Environment, time):
     idle_processors = list(filter(lambda proc: proc.is_idle, env.processor_list))
+    running_processors = list(filter(lambda proc: not proc.is_idle, env.processor_list))
     if len(idle_processors) == 0:
         return 
     idle_processor_id_set = set([proc.id for proc in idle_processors])
-    env.upcomming_tasks.sort(key=lambda task: heuristic(task, time, idle_processors), reverse=True)
+    env.upcomming_tasks.sort(key=lambda task: heuristic(task, time, idle_processors, env), reverse=True)
 
     for upcomming_task in env.upcomming_tasks.copy():
+        idle_processors = list(filter(lambda proc: proc.is_idle, env.processor_list))
+        running_processors = list(filter(lambda proc: not proc.is_idle, env.processor_list))
+        idle_processor_id_set = set([proc.id for proc in idle_processors])
         # here we only continue if atleast one processor is available
         # but maybe extracting only the available processors will make 
         # the program even faster
@@ -457,39 +465,99 @@ def heuristic_scheduler(env:Environment, time):
 
         wait_for_cache_hit = False
         for processor in filter(lambda p: upcomming_task in p.cache and not p.is_idle, env.processor_list):
-            if upcomming_task.EET * 0.1 > processor.current_running_task.finish_time:
+            if upcomming_task.EET * 0.1 > processor.current_running_task.finish_time - time:
                 wait_for_cache_hit = True
+                print("Wait for cache triggered")
         if wait_for_cache_hit: continue
-        
-        # Here we create a set of processor ids which should be prioritized according to the tasks
-        # largest ict
-        p_priority = sorted(list(upcomming_task.pref_p), key=lambda t: t[2] + t[1] - time, reverse=True)
-        ict_priority = set([p_id for p_id, _, _ in p_priority]).intersection(idle_processor_id_set)
 
-        # Here we create a set of processor ids which should be prioritized according to the tasks
-        # cache hits
-        cache_priority = set()
-        for p_id, proc in enumerate(env.processor_list):
-            if upcomming_task._type in [cached_task._type for cached_task in proc.cache] and p_id in idle_processor_id_set:
-                cache_priority.add(p_id)
-
-        # if upcomming_task.dag.child_depth < 4: # four is related to the cache size
-        #     success = prio_scheduling(upcomming_task, ict_priority, cache_priority, idle_processor_id_set, env, time)
-        # else:
-        #     # here we try schedule upcomming_task with priority cache then ict then rest
-        #     success = prio_scheduling(upcomming_task, cache_priority, ict_priority, idle_processor_id_set, env, time)
-        success = prio_scheduling(upcomming_task, ict_priority, cache_priority, idle_processor_id_set, env, time)
-
+        do_as_normal(upcomming_task, idle_processor_id_set, env, env.time_stamp)
     return
 
-def hmmm_schedule(env:Environment, time):
+def do_as_normal(upcomming_task:Task, idle_processor_id_set, env:Environment, time):
+    
+    # Here we create a set of processor ids which should be prioritized according to the tasks
+    # largest ict
+    p_priority = sorted(list(upcomming_task.pref_p), key=lambda t: t[2] + t[1] - time, reverse=True)
+    ict_priority = set([p_id for p_id, _, _ in p_priority]).intersection(idle_processor_id_set)
+
+    # Here we create a set of processor ids which should be prioritized according to the tasks
+    # cache hits
+    cache_priority = set()
+    for p_id, proc in enumerate(env.processor_list):
+        if upcomming_task._type in [cached_task._type for cached_task in proc.cache] and p_id in idle_processor_id_set:
+            cache_priority.add(p_id)
+    if upcomming_task.dag.child_depth < 4: # four is related to the cache size
+        success = prio_scheduling(upcomming_task, ict_priority, cache_priority, idle_processor_id_set, env, time)
+    else:
+        # here we try schedule upcomming_task with priority cache then ict then rest
+        success = prio_scheduling(upcomming_task, cache_priority, ict_priority, idle_processor_id_set, env, time)
+    #success = prio_scheduling(upcomming_task, ict_priority, cache_priority, idle_processor_id_set, env, time)
+
+def evalQ(processor_list:list[Processor], task_list:list[Task], time):
+    # idle_processors = list(filter(lambda proc: proc.is_idle, processor_list))
     Q = []
-    for p_id, processor in filter(lambda proc: proc.is_idle, env.processor_list):
+    temp = []
+    for i, processor in enumerate(processor_list):
         Q.append([])
-        for i, task in enumerate(env.upcomming_tasks):
-            Q[p_id].append(heuristic(task, processor, time))
-            
-    pass
+        for j, task in enumerate(task_list):
+            if i == 0:
+                temp.append(False)
+            h = heuristic2(task, time, processor)
+            Q[i].append(h)
+            if not h > -math.inf:
+                temp[j] = True
+
+    for i, processor in enumerate(processor_list):
+        for j, not_to_schedule in enumerate(temp):
+            if not_to_schedule:
+                Q[i][j] = -math.inf
+
+    """if True in temp:
+        print(np.array(Q))
+        print(temp)
+        input()
+"""
+    return Q
+
+def h2Scheduler(env:Environment, time):
+    idle_processors = list(filter(lambda p: p.is_idle, env.processor_list))
+    available_tasks = env.upcomming_tasks.copy()
+    v = 0
+    invalid_pairings = list()
+    # Q = evalQ(idle_processors, available_tasks, time)
+    while len(idle_processors) > 0 and len(available_tasks) > 0:
+        Q = evalQ(env.processor_list, available_tasks, time)
+        # filter out already attempted invalid pairings
+        for p_id, t_id in invalid_pairings:
+            #print(p_id, t_id, len(Q), len(Q[0]), len(available_tasks))
+            Q[p_id][t_id] = -math.inf
+        #print(np.array(Q))
+        p_id, t_id, _ = argmax(Q)
+        processor = env.processor_list[p_id]
+        task = available_tasks[t_id]
+        # print(task.name, len(available_tasks), len(idle_processors), p_id, t_id)
+        if processor.start(task, env.time_stamp):
+            pop_task_from_list(task, env.upcomming_tasks, time, p_id)
+            task_to_remove = available_tasks.pop(t_id)
+            invalid_pairings = []
+            idle_processors = list(filter(lambda p: p.is_idle, env.processor_list))
+        else:
+            invalid_pairings.append((p_id, t_id))
+            if len(invalid_pairings) == len(idle_processors) * len(available_tasks):
+                break
+    #heuristic_scheduler(env, time)
+    #print(env.time_stamp, [task.name for task in available_tasks])
+
+def argmax(M: list[list[int]]) -> tuple[int, int, int]:
+    max_value = -math.inf
+    out = (0, 0, max_value)
+    for i, row in enumerate(M):
+        for j, cell_value in enumerate(row):
+            if cell_value > max_value:
+                max_value = cell_value
+                out = (i, j, cell_value)
+    return out
+
 
 def prio_scheduling(upcomming_task:Task, set1:set[int], set2:set[int], total_set:set[int], env:Environment, time):
     success = False
@@ -512,9 +580,21 @@ def prio_scheduling(upcomming_task:Task, set1:set[int], set2:set[int], total_set
         return success
     return success
 
+
+
 def try_schedule_on(upcomming_task:Task, processor_set:set[Processor], time:int, env:Environment):
+    
     success = False
+    
+    N = len(processor_set)
+    if N == 0:
+        return False, -1
+    stride_counter[0] += 1
+    stride_counter[1] = stride_counter[0] % N
     temp_processor_list = list(processor_set)
+    temp_processor_list = temp_processor_list + temp_processor_list
+    temp_processor_list = temp_processor_list[stride_counter[1]:stride_counter[1] + N]
+
     # random.shuffle(temp_processor_list)
     for p_id in temp_processor_list:
         success = env.processor_list[p_id].start(upcomming_task, time)
@@ -523,7 +603,7 @@ def try_schedule_on(upcomming_task:Task, processor_set:set[Processor], time:int,
             return success, p_id
     return success, -1
 
-def heuristic(task: Task, time: int, processor_list:list[Processor]):
+def heuristic(task: Task, time: int, processor_list:list[Processor], env:Environment):
     # Time until deadline
     h0 = -(task.dag_deadline - time)
     # Max posible communication penalty (ict)
@@ -547,7 +627,43 @@ def heuristic(task: Task, time: int, processor_list:list[Processor]):
         # giving high priority if there are only few cache hits
         h3 = time_save * (len(processor_list) - cache_hits)
     h = h0 + h1 + h2 + h3
+    task.heuristic = h
     return h
+
+def heuristic2(task: Task, time: int, processor:Processor):
+    # Time until deadline
+    h0 = -(task.dag_deadline - time)
+    # Max posible communication penalty (ict)
+    ict_list = list(filter(lambda pref: pref[0] == processor.id, task.pref_p))
+    h1 = 0
+    if len(ict_list) > 0 and processor.finish_time_of_running_task is not None:
+        ict = ict_list[0][1]
+        h1 = max(0, processor.finish_time_of_running_task + ict - time)
+        if h1 == 0:
+            return 100
+    #h1 /= task.max_ict
+    # execution time left of the dags longest path from todo.task 
+    # h2 = task.norm_effective_depth  # normalized with the deadline of dag
+    h2 = task.EET_depth
+    
+    # h3 should be the time gain if we are able to find a cache hit
+    time_save = int(0.1*task.EET)
+    cache_hit = int(task._type in [cached_task._type for cached_task in processor.cache])
+    h3 = time_save * cache_hit
+    
+    if h3 != 0:
+        return 100
+
+    if not processor.is_idle:
+        # print(time, processor.id, task.name)
+        ict = 0
+        if len(ict_list) > 0:
+            ict = ict_list[0][1]
+        if processor.finish_time_of_running_task - time < max(ict, h3):
+            return -math.inf
+    #print(h0, h1, h2, h3)
+    h = h0 + h1 + h2 + h3
+    return h0
     # heuristic(todo) = alpha * (dag.deadline) + beta * todo.EET
 
 
@@ -623,8 +739,6 @@ def output_csv(processor_list: list[Processor], dag_list: list[DAG], elapsed_tim
 
 def main(input_filename: str, output_filename: str, n_processors: int = 8):
     dag_list: list[DAG] = load_from_json(input_filename)
-
-
     # something that keeps track of what we've done
     # initialze a empty schedule, the history
     # schedule = Schedule()
@@ -645,6 +759,7 @@ def main(input_filename: str, output_filename: str, n_processors: int = 8):
             # print("-"*30)
             # print("Env time stamp", env.time_stamp)
             heuristic_scheduler(env, env.time_stamp)
+            # h2Scheduler(env, env.time_stamp)
             env.step()
         stop_time = time.time_ns()
         # CHECK? rounding error?
@@ -680,7 +795,8 @@ if __name__ == '__main__':
     print(pn_std)
     print(utility)
     quit()"""
-
+    #main("testsNEW/test1.json", "answer1.csv")
+    #quit()
 
     testcases = [f"test{i}.json" for i in range(1, 10)]
 
