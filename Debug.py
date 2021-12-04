@@ -10,6 +10,8 @@ from types import new_class
 # from DAG import DAG
 # from Processor import Processor, TODO
 # from Environment import Environment
+flip_flop = dict()
+flip_flop_set = set()
 
 
 class FailedToScheduleException(Exception):
@@ -438,6 +440,14 @@ def load_from_json(file_name) -> list[DAG]:
 
 # - We if we have finished a task, we want to prioritize its children with the largest ict
 # - We want to utilize caching for tasks with large EET, i.e, same type of tasks should be scheduled on the same core within 4 scheduled tasks
+def flip_flop_check(task):
+    key = task.dag._type
+    if task.dag.name not in flip_flop_set:
+        flip_flop_set.add(task.dag.name)
+        if key not in flip_flop.keys():
+            flip_flop[key] = 1
+        flip_flop[key] = (flip_flop[key]+1) % 2
+    return flip_flop[key]
 
 def heuristic_scheduler(env:Environment, time):
     idle_processors = list(filter(lambda proc: proc.is_idle, env.processor_list))
@@ -445,6 +455,10 @@ def heuristic_scheduler(env:Environment, time):
         return 
     idle_processor_id_set = set([proc.id for proc in idle_processors])
     env.upcomming_tasks.sort(key=lambda task: heuristic(task, time, idle_processors), reverse=True)
+    # prioritize high frequient tasks
+    # env.upcomming_tasks.sort(key=lambda task: int(task.dag.period <= 70000), reverse=True)
+    # prioritize flip flop
+    env.upcomming_tasks.sort(key=lambda task: flip_flop_check(task), reverse=True)
     # print([t.task.name for t in upcomming_tasks])
     # print("Is p idle?", [p.is_idle for p in processor_list])
 
