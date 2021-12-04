@@ -528,6 +528,7 @@ def heuristic(task: Task, time: int, processor_list:list[Processor]):
         cache_hits += int(task._type in [cached_task._type for cached_task in proc.cache])
     h3 = 0
     if task.child_depth < 4:
+    # if cache_hits > 0:
         # now multiply time_save with the complement of cache_hits
         # giving high priority if there are only few cache hits
         h3 = time_save * (len(processor_list) - cache_hits)
