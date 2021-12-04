@@ -445,14 +445,11 @@ def heuristic_scheduler(env:Environment, time):
         return 
     idle_processor_id_set = set([proc.id for proc in idle_processors])
     env.upcomming_tasks.sort(key=lambda task: heuristic(task, time, idle_processors), reverse=True)
-    # print([t.task.name for t in upcomming_tasks])
-    # print("Is p idle?", [p.is_idle for p in processor_list])
 
     for upcomming_task in env.upcomming_tasks.copy():
         # here we only continue if atleast one processor is available
         # but maybe extracting only the available processors will make 
         # the program even faster
-        # idle_processors = list(filter(lambda proc: proc.is_idle, processor_list))
         if len(idle_processor_id_set) == 0:
             return 
         # print("trying task", todo.task.name)
@@ -484,6 +481,15 @@ def heuristic_scheduler(env:Environment, time):
         success = prio_scheduling(upcomming_task, ict_priority, cache_priority, idle_processor_id_set, env, time)
 
     return
+
+def hmmm_schedule(env:Environment, time):
+    Q = []
+    for p_id, processor in filter(lambda proc: proc.is_idle, env.processor_list):
+        Q.append([])
+        for i, task in enumerate(env.upcomming_tasks):
+            Q[p_id].append(heuristic(task, processor, time))
+            
+    pass
 
 def prio_scheduling(upcomming_task:Task, set1:set[int], set2:set[int], total_set:set[int], env:Environment, time):
     success = False
